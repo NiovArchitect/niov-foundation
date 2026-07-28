@@ -1,0 +1,21 @@
+{
+  "title": "OTZAR_AUTONOMOUS_REPORT_RESULTS",
+  "date": "2026-07-28",
+  "status": "PARTIAL_LIVE_PROJECTIONS",
+  "doctrine": "docs/product/OTZAR_AUTONOMOUS_REPORTING_AND_KPI_SYSTEM.md",
+  "autonomous_reports": {
+    "founder_today_hierarchy": "LIVE",
+    "team_movement": "LIVE",
+    "action_lifecycle_needs_me": "LIVE",
+    "manager_pack": "PARTIAL",
+    "executive_exception_rate_kpi": "FORWARD"
+  },
+  "kpi_sources": [
+    "actions list statuses",
+    "team-work open obligations",
+    "collaboration COMPLETED receipts",
+    "presence approval counts",
+    "handoff lists"
+  ],
+  "fabricated_metrics": false
+}

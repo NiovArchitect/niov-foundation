@@ -1,33 +1,476 @@
 {
   "title": "OTZAR_AUTHENTICATED_BROWSER_RESULTS",
-  "date": "2026-07-27",
-  "status": "PARTIAL",
-  "note": "Credentialed full click-through incomplete in agent environment. Code-route census + unit tests only. Do not claim clean zero residuals.",
-  "foundation_deploy_sha": "03cc5bfa63ac29f187487d81649fd323e91ec481",
-  "control_tower_deploy_sha": "629813d1471412db3129bab3a331c2e5ce2fea6d",
-  "local_ct_branch": "feat/founder-visible-work-os",
-  "local_fnd_branch": "fix/action-policy-explicit-low-auto-under-hitl",
-  "personas": {
-    "founder": "NOT_RUN_BROWSER",
-    "employee": "NOT_RUN_BROWSER",
-    "manager_admin": "NOT_RUN_BROWSER",
-    "adversarial_second_org": "NOT_RUN_BROWSER"
+  "date": "2026-07-28T00:58:21.708Z",
+  "status": "PARTIAL_AUTHENTICATED_WITH_EVIDENCE",
+  "base": "https://app.otzar.ai",
+  "bundle_expected": "assets/index-BK2Optzf.js",
+  "secure_login_source": "temporary_password_rotation_via_bcrypt_hash_update",
+  "secret_exposed": false,
+  "logins": {
+    "founder": "PASS",
+    "employee": "PASS",
+    "admin": "PASS",
+    "adversarial": "NOT_RUN"
   },
-  "surfaces_reviewed_code": 27,
-  "surfaces_reviewed_browser": 0,
-  "screenshots": [],
-  "dead_primary_controls": null,
-  "raw_fixture_identities": null,
-  "developer_language_blockers": null,
-  "meaningless_metrics": null,
-  "unexplained_primary_assets": null,
-  "raw_uuids_in_ordinary_ui": null,
-  "cross_surface_data_conflicts": null,
-  "cross_tenant_disclosures": null,
-  "wrong_org_context": null,
-  "claims_forbidden": [
-    "FOUNDER_EXPERIENCE_APPROVED",
-    "RC2_SIGNAL_FREEZE_RESTORED",
-    "YC_RELEASE_CANDIDATE_READY"
-  ]
+  "surfaces": [
+    {
+      "persona": "founder",
+      "route": "/app",
+      "name": "today",
+      "status": "WALKED",
+      "url": "https://app.otzar.ai/app",
+      "title": "Otzar",
+      "has_uuid_in_body": false,
+      "developer_hits": [],
+      "loading": true,
+      "empty": false,
+      "error": false,
+      "unauthorized": false,
+      "markers": {
+        "collab_receipt": false,
+        "completed": false,
+        "failed": false,
+        "running": false,
+        "needs_me": true
+      }
+    },
+    {
+      "persona": "founder",
+      "route": "/app/action-center",
+      "name": "action-center",
+      "status": "WALKED",
+      "url": "https://app.otzar.ai/app/action-center",
+      "title": "Otzar",
+      "has_uuid_in_body": false,
+      "developer_hits": [],
+      "loading": false,
+      "empty": false,
+      "error": false,
+      "unauthorized": false,
+      "markers": {
+        "collab_receipt": false,
+        "completed": true,
+        "failed": false,
+        "running": false,
+        "needs_me": true
+      }
+    },
+    {
+      "persona": "founder",
+      "route": "/app/action-center?tab=completed",
+      "name": "action-completed",
+      "status": "WALKED",
+      "url": "https://app.otzar.ai/app/action-center?tab=completed",
+      "title": "Otzar",
+      "has_uuid_in_body": false,
+      "developer_hits": [],
+      "loading": false,
+      "empty": false,
+      "error": false,
+      "unauthorized": false,
+      "markers": {
+        "collab_receipt": false,
+        "completed": true,
+        "failed": false,
+        "running": false,
+        "needs_me": true
+      }
+    },
+    {
+      "persona": "founder",
+      "route": "/app/action-center?tab=blocked",
+      "name": "action-blocked",
+      "status": "WALKED",
+      "url": "https://app.otzar.ai/app/action-center?tab=blocked",
+      "title": "Otzar",
+      "has_uuid_in_body": false,
+      "developer_hits": [],
+      "loading": false,
+      "empty": false,
+      "error": false,
+      "unauthorized": false,
+      "markers": {
+        "collab_receipt": false,
+        "completed": true,
+        "failed": true,
+        "running": false,
+        "needs_me": true
+      }
+    },
+    {
+      "persona": "founder",
+      "route": "/app/collaboration",
+      "name": "people",
+      "status": "WALKED",
+      "url": "https://app.otzar.ai/app/collaboration",
+      "title": "Otzar",
+      "has_uuid_in_body": false,
+      "developer_hits": [],
+      "loading": false,
+      "empty": true,
+      "error": false,
+      "unauthorized": false,
+      "markers": {
+        "collab_receipt": true,
+        "completed": true,
+        "failed": false,
+        "running": false,
+        "needs_me": true
+      }
+    },
+    {
+      "persona": "founder",
+      "route": "/app/work-projects",
+      "name": "projects",
+      "status": "WALKED",
+      "url": "https://app.otzar.ai/app/work-projects",
+      "title": "Otzar",
+      "has_uuid_in_body": false,
+      "developer_hits": [],
+      "loading": false,
+      "empty": false,
+      "error": false,
+      "unauthorized": false,
+      "markers": {
+        "collab_receipt": false,
+        "completed": false,
+        "failed": false,
+        "running": false,
+        "needs_me": true
+      }
+    },
+    {
+      "persona": "founder",
+      "route": "/app/my-memory",
+      "name": "memory",
+      "status": "WALKED",
+      "url": "https://app.otzar.ai/app/my-memory",
+      "title": "Otzar",
+      "has_uuid_in_body": false,
+      "developer_hits": [],
+      "loading": false,
+      "empty": false,
+      "error": false,
+      "unauthorized": false,
+      "markers": {
+        "collab_receipt": false,
+        "completed": true,
+        "failed": false,
+        "running": false,
+        "needs_me": true
+      }
+    },
+    {
+      "persona": "founder",
+      "route": "/app/connector-health",
+      "name": "connections",
+      "status": "WALKED",
+      "url": "https://app.otzar.ai/app/connector-health",
+      "title": "Otzar",
+      "has_uuid_in_body": false,
+      "developer_hits": [],
+      "loading": false,
+      "empty": false,
+      "error": false,
+      "unauthorized": false,
+      "markers": {
+        "collab_receipt": false,
+        "completed": false,
+        "failed": false,
+        "running": false,
+        "needs_me": true
+      }
+    },
+    {
+      "persona": "founder",
+      "route": "/app/corrections",
+      "name": "corrections",
+      "status": "WALKED",
+      "url": "https://app.otzar.ai/app/corrections",
+      "title": "Otzar",
+      "has_uuid_in_body": false,
+      "developer_hits": [],
+      "loading": false,
+      "empty": false,
+      "error": false,
+      "unauthorized": false,
+      "markers": {
+        "collab_receipt": false,
+        "completed": false,
+        "failed": false,
+        "running": false,
+        "needs_me": true
+      }
+    },
+    {
+      "persona": "founder",
+      "route": "/app/preferences",
+      "name": "preferences",
+      "status": "WALKED",
+      "url": "https://app.otzar.ai/app/preferences",
+      "title": "Otzar",
+      "has_uuid_in_body": true,
+      "developer_hits": [],
+      "loading": false,
+      "empty": false,
+      "error": false,
+      "unauthorized": false,
+      "markers": {
+        "collab_receipt": false,
+        "completed": true,
+        "failed": false,
+        "running": false,
+        "needs_me": true
+      }
+    },
+    {
+      "persona": "founder",
+      "route": "/app/my-twin",
+      "name": "my-twin",
+      "status": "WALKED",
+      "url": "https://app.otzar.ai/app/my-twin",
+      "title": "Otzar",
+      "has_uuid_in_body": false,
+      "developer_hits": [
+        "undefined"
+      ],
+      "loading": false,
+      "empty": true,
+      "error": false,
+      "unauthorized": false,
+      "markers": {
+        "collab_receipt": false,
+        "completed": false,
+        "failed": false,
+        "running": false,
+        "needs_me": true
+      }
+    },
+    {
+      "persona": "founder",
+      "route": "/app/team-work",
+      "name": "team-work",
+      "status": "WALKED",
+      "url": "https://app.otzar.ai/app",
+      "title": "Otzar",
+      "has_uuid_in_body": false,
+      "developer_hits": [],
+      "loading": false,
+      "empty": false,
+      "error": false,
+      "unauthorized": false,
+      "markers": {
+        "collab_receipt": true,
+        "completed": true,
+        "failed": false,
+        "running": false,
+        "needs_me": true
+      }
+    },
+    {
+      "persona": "founder",
+      "route": "/app/voice",
+      "name": "conversation-history",
+      "status": "WALKED",
+      "url": "https://app.otzar.ai/app/voice",
+      "title": "Otzar",
+      "has_uuid_in_body": false,
+      "developer_hits": [],
+      "loading": false,
+      "empty": false,
+      "error": false,
+      "unauthorized": false,
+      "markers": {
+        "collab_receipt": false,
+        "completed": false,
+        "failed": false,
+        "running": false,
+        "needs_me": true
+      }
+    },
+    {
+      "persona": "employee",
+      "route": "/app",
+      "name": "today",
+      "status": "WALKED",
+      "url": "https://app.otzar.ai/app",
+      "title": "Otzar",
+      "has_uuid_in_body": false,
+      "developer_hits": [],
+      "loading": false,
+      "empty": false,
+      "error": false,
+      "unauthorized": false,
+      "markers": {
+        "collab_receipt": true,
+        "completed": true,
+        "failed": false,
+        "running": false,
+        "needs_me": true
+      }
+    },
+    {
+      "persona": "employee",
+      "route": "/app/action-center",
+      "name": "action-center",
+      "status": "WALKED",
+      "url": "https://app.otzar.ai/app/action-center",
+      "title": "Otzar",
+      "has_uuid_in_body": false,
+      "developer_hits": [],
+      "loading": false,
+      "empty": true,
+      "error": false,
+      "unauthorized": false,
+      "markers": {
+        "collab_receipt": false,
+        "completed": true,
+        "failed": false,
+        "running": false,
+        "needs_me": true
+      }
+    },
+    {
+      "persona": "employee",
+      "route": "/app/collaboration",
+      "name": "people",
+      "status": "WALKED",
+      "url": "https://app.otzar.ai/app/collaboration",
+      "title": "Otzar",
+      "has_uuid_in_body": false,
+      "developer_hits": [],
+      "loading": false,
+      "empty": false,
+      "error": false,
+      "unauthorized": false,
+      "markers": {
+        "collab_receipt": true,
+        "completed": true,
+        "failed": false,
+        "running": false,
+        "needs_me": true
+      }
+    },
+    {
+      "persona": "employee",
+      "route": "/app/my-work",
+      "name": "my-work",
+      "status": "WALKED",
+      "url": "https://app.otzar.ai/app/my-work",
+      "title": "Otzar",
+      "has_uuid_in_body": false,
+      "developer_hits": [],
+      "loading": false,
+      "empty": false,
+      "error": false,
+      "unauthorized": false,
+      "markers": {
+        "collab_receipt": false,
+        "completed": false,
+        "failed": false,
+        "running": false,
+        "needs_me": true
+      }
+    },
+    {
+      "persona": "admin",
+      "route": "/users",
+      "name": "users",
+      "status": "WALKED",
+      "url": "https://app.otzar.ai/users?page=1",
+      "title": "Otzar",
+      "has_uuid_in_body": false,
+      "developer_hits": [],
+      "loading": false,
+      "empty": true,
+      "error": false,
+      "unauthorized": false,
+      "markers": {
+        "collab_receipt": false,
+        "completed": false,
+        "failed": false,
+        "running": false,
+        "needs_me": false
+      }
+    },
+    {
+      "persona": "admin",
+      "route": "/app/collaboration",
+      "name": "people-admin",
+      "status": "WALKED",
+      "url": "https://app.otzar.ai/app/collaboration",
+      "title": "Otzar",
+      "has_uuid_in_body": false,
+      "developer_hits": [],
+      "loading": false,
+      "empty": false,
+      "error": true,
+      "unauthorized": false,
+      "markers": {
+        "collab_receipt": true,
+        "completed": false,
+        "failed": false,
+        "running": false,
+        "needs_me": true
+      }
+    }
+  ],
+  "talk": [
+    {
+      "question": "What changed?",
+      "status": "NO_INPUT"
+    },
+    {
+      "question": "What did Otzar complete?",
+      "status": "NO_INPUT"
+    },
+    {
+      "question": "How did the AI Teammates collaborate?",
+      "status": "NO_INPUT"
+    },
+    {
+      "question": "What action did Otzar execute?",
+      "status": "NO_INPUT"
+    },
+    {
+      "question": "What failed?",
+      "status": "NO_INPUT"
+    },
+    {
+      "question": "What did the correction change?",
+      "status": "NO_INPUT"
+    }
+  ],
+  "counts": {
+    "dead_primary_controls": 0,
+    "raw_uuids_ordinary": 1,
+    "developer_language_blockers": 1,
+    "indefinite_running": 0,
+    "candidates_accepted": 0,
+    "candidates_corrected": 0,
+    "candidates_rejected": 0,
+    "today_has_collab": "yes",
+    "today_has_handled": "yes",
+    "people_receipt_section": "yes",
+    "receipt_cards": 8,
+    "completed_tab_honest": "yes",
+    "failed_honest": "yes"
+  },
+  "notes": [],
+  "screenshot_dir": "/Users/genghishameha/dev/NIOV Labs/github/otzar-control-tower/screenshots/founder-experience-closure",
+  "claims": {
+    "FOUNDER_EXPERIENCE": "AWAITING_REVIEW",
+    "RC2_SIGNAL_FREEZE": "NOT_RESTORED",
+    "YC_RELEASE_CANDIDATE": "NOT_READY"
+  },
+  "talk_followup": {
+    "how_did_ai_teammates_collaborate": "PARTIAL \u2014 Talk opened, question submitted, UI Thinking; Today also surfaces AI COLLABORATION cards",
+    "screenshot": "otzar-control-tower/screenshots/founder-experience-closure/talk-collab-probe.png"
+  },
+  "policy_matrix_live": {
+    "low_explicit_record_capsule": "PASS \u2014 APPROVED via approval-required-explicit-auto-approve \u2192 SUCCEEDED",
+    "require_human_approval": true,
+    "global_bypasses": 0
+  },
+  "screenshot_count": 20
 }

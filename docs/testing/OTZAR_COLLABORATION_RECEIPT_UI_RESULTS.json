@@ -1,21 +1,21 @@
 {
   "title": "OTZAR_COLLABORATION_RECEIPT_UI_RESULTS",
-  "date": "2026-07-27",
-  "status": "PARTIAL",
+  "date": "2026-07-28T01:01:55.690766+00:00",
+  "status": "PARTIAL_PASS",
   "backend_receipt_id": "8e46a8e6-9033-485c-af52-6d03c37b5bfd",
-  "backend_lifecycle": "PASS",
+  "backend_lifecycle": "PASS_COMPLETED_ON_DAVID_OUTBOUND",
   "ui": {
-    "people_page_receipt_section": "IMPLEMENTED_LOCAL",
-    "today_compact_receipt": "IMPLEMENTED_LOCAL",
-    "action_center_receipt": "NOT_YET",
-    "talk_answer_how_collaborated": "NOT_PROVEN",
-    "human_readable_who_why_result_time": "YES_IN_COMPONENT",
+    "people_page_receipt_section": "PASS_BROWSER",
+    "today_ai_collaboration_band": "PASS_VISIBLE_WHEN_LOADED",
+    "founder_sees_generic_completed_receipts": true,
+    "specific_8e46_on_founder_outbound": false,
+    "employee_david_has_receipt": true,
+    "talk_grounding": "PARTIAL",
     "raw_prompts_exposed": false,
-    "chain_of_thought_exposed": false,
-    "uuid_in_ordinary_title": false,
-    "uuid_in_progressive_disclosure": true
+    "uuid_in_ordinary_title": false
   },
-  "unit_tests": "tests/unit/collaboration-receipt.test.ts",
-  "deployed_to_production": false,
-  "founder_visible": "NOT_PROVEN_UNTIL_DEPLOY_AND_BROWSER"
+  "screenshots": [
+    "screenshots/founder-experience-closure/founder-people.png",
+    "screenshots/founder-experience-closure/employee-today.png"
+  ]
 }

@@ -1,64 +1,82 @@
-# OTZAR Governed Candidate Review
+# OTZAR Governed Candidate Review (Exception Layer)
 
-**Date:** 2026-07-27  
-**Status:** PARTIAL — review rails exist; full Accept/Correct/Reject product loop not complete in authenticated UI
+**Date:** 2026-07-28  
+**Status:** PARTIAL product · **Doctrine corrected** — exception/control layer, not mandatory checkpoint for every extract  
 
-## Intent
+## Critical correction
 
-Extraction already produces decisions, commitments, and risks. Founders and employees need a **complete human review experience** before candidates become accepted governed work.
+**Do not** implement:
+
+```
+every decision/commitment/risk → human Accept/Correct/Reject
+```
+
+That manufactures an approval job and contradicts AI Teammates.
+
+**Do implement:**
+
+> Autonomous by default within proven bounds.  
+> Human governance by **exception**.  
+> Accept / Correct / Reject remain tools for uncertainty, consequence, conflict, and learning.
+
+See: `docs/ai/OTZAR_AUTONOMY_DECISION_MODEL.md` paths A–G.
+
+## What belongs in candidate review / Needs me
+
+| Include (PATH E / F) | Exclude (PATH A / B / C) |
+|----------------------|--------------------------|
+| Low confidence | High-confidence routine organize |
+| Conflicting sources | Already-accepted truth projections |
+| Unclear owner | Low-risk explicit policy execution |
+| Material / org-wide decision | Informational summaries |
+| Consequential correction | Duplicate/status noise |
+| Medium/high risk approval | Metric refresh |
+| New recurring pattern proposal (one-time) | Repeat of approved pattern |
+| Policy exception | Source preservation |
+
+For every item shown, surface **why the user is uniquely needed**:
+
+- Ambiguous owner · Conflicting source · Material decision · Approval required · New recurring behavior · Policy exception · Low confidence · Consequential correction · External action · Sensitive access change  
+
+If none apply → **do not place in Needs me**.
+
+## Accept / Correct / Reject (exception tools)
+
+| Action | Meaning |
+|--------|---------|
+| **Accept** | Promote exception item to current governed truth/work; audit |
+| **Correct** | Keep original; store correction; fanout projections; learn |
+| **Reject** | Keep history; no promotion; learn not to re-surface identically |
+
+Consequential items still must not bulk-accept without review.
 
 ## Existing substrate (do not rebuild)
 
-| Surface | Role |
-|---------|------|
-| `POST /otzar/comms/extract` | Ephemeral structured extraction |
-| `POST /otzar/observe/extract` | Observe path |
-| `POST /otzar/context/extract-preview` | Document extract preview (review-first) |
-| `OrgTruthReviewDrawer` | Org truth conflict candidates |
-| `TranscriptActionReview` | Talk/transcript proposed actions (Save / Send / Dismiss) |
-| Action Center | Actions, handoffs, obligations, evidence |
-| Work-style candidates | Approve / reject on work-style only |
+| Surface | Path fit |
+|---------|----------|
+| Explicit ActionPolicy LOW AUTO_APPROVE | B |
+| OrgTruthReviewDrawer | E (conflicts) |
+| TranscriptActionReview | D/E (talk proposals) |
+| Document extract-preview | D/E |
+| Action Center approvals / dual-control | F |
+| Work-style candidates approve/reject | C/E partial |
+| Today founder hierarchy | A/B signal; E/F only in “needs decision” |
 
-## Target review card fields
+## Implementation status
 
-For every candidate:
-
-- **Type:** Decision | Commitment | Risk | Handoff | Approval | Correction  
-- Clear summary  
-- Source speaker + excerpt  
-- Project  
-- Proposed owner  
-- Due time  
-- Confidence  
-- Downstream impact  
-- Approval requirement  
-
-**Actions:** Accept · Correct · Reject · Change owner · Change due · Change project · Require approval · Open source  
-
-**Rules:** Consequential candidates must not bulk-accept without review.
-
-## Persistence contract
-
-| Action | Persist |
-|--------|---------|
-| ACCEPT | Accepted truth/work, reviewer, time, source, audit |
-| CORRECT | Original + corrected, editor, reason, downstream, audit |
-| REJECT | Candidate history retained; current truth unchanged; reason; audit |
-
-## Gap vs HEAD
-
-1. No single Action Center tab that lists **comms extraction** candidates with Accept/Correct/Reject end-to-end.  
-2. `TranscriptActionReview` covers Talk-proposed actions only (not full Decision/Commitment/Risk taxonomy).  
-3. Org-truth drawer covers conflicts, not the full launch-decision candidate set.  
-4. Document extract-preview is review-first but not the founder default path.
-
-## Recommended path (no engine rewrite)
-
-1. Prefer **Action Center** as host (already “Needs me”).  
-2. Add a **Candidates** subsection fed by existing extract-preview / persisted extract review APIs when present — **do not** invent a parallel execution engine.  
-3. Wire Accept → existing work-item / obligation create rails; Correct → correction promotion; Reject → history retain.  
-4. Tests: unit for mapper + integration for accept/reject audit.
+| Capability | Status |
+|------------|--------|
+| Exception doctrine | **This document** |
+| Full PATH E queue UI (Accept/Correct/Reject) | **NOT COMPLETE** |
+| Auto PATH A/B for high-confidence extracts | **PARTIAL** (actions/policy; not full extract→work) |
+| “Why you are needed” labels | **FORWARD** for unified queue |
 
 ## Founder claim
 
-**GOVERNED CANDIDATE REVIEW: NOT COMPLETE** until Accept/Correct/Reject is live for Decision/Commitment/Risk with audit and browser evidence.
+**CANDIDATE REVIEW** is successful when:
+
+1. Routine work does **not** force approvals.  
+2. Exception items that need judgment have Accept / Correct / Reject + audit.  
+3. Human intervention rate for routines trends **down**.  
+
+Until the exception queue is complete: **PARTIAL** — not “fail because every extract isn’t approved.”

@@ -1,0 +1,19 @@
+{
+  "title": "OTZAR_AUTONOMOUS_WORK_OS_SMOKE_RESULTS",
+  "date": "2026-07-28",
+  "status": "PARTIAL",
+  "autonomy_model": "Autonomous within policy/authority; humans by exception",
+  "routine_items_auto_organized": null,
+  "exception_items_routed_to_human": null,
+  "unnecessary_human_prompts": null,
+  "autonomous_actions": ">=1 LIVE (RECORD_CAPSULE LOW policy)",
+  "human_approved_actions": null,
+  "blocked_high_risk_actions": "LIVE_WHEN_NO_SECOND_ADMIN",
+  "learning_authority_expansions": 0,
+  "ai_to_ai_collaborations": ">=1 COMPLETED receipt 8e46a8e6",
+  "collaborations_without_human_interrupt": "ASSUMED_FOR_COMPLETED_RECEIPT_NOT_FULLY_INSTRUMENTED",
+  "two_minute_demo": "CONTRACT_READY_TIMED_RUN_PENDING",
+  "future_communication_layer_readiness": "PARTIAL",
+  "caretaker_relay_touched": false,
+  "background_workers": 0
+}

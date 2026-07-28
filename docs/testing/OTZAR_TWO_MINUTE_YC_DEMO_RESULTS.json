@@ -1,0 +1,17 @@
+{
+  "title": "OTZAR_TWO_MINUTE_YC_DEMO_RESULTS",
+  "date": "2026-07-28",
+  "status": "CONTRACT_READY_TIMED_RUN_PENDING",
+  "contract": "docs/product/OTZAR_TWO_MINUTE_YC_DEMO.md",
+  "duration_seconds_measured": null,
+  "two_minute_demo": "NOT_RUN_TIMED",
+  "anchors_ready": {
+    "today_hierarchy": true,
+    "collab_receipt_ui": true,
+    "action_success_failure_honest": true,
+    "low_risk_auto_within_policy": true,
+    "exception_not_approval_occupation": "DOCTRINE_CORRECTED"
+  },
+  "script_pass_criteria": "docs/product/OTZAR_TWO_MINUTE_YC_DEMO.md",
+  "note": "Fill duration after founder or agent stopwatch on live app; do not claim PASS without timed run"
+}

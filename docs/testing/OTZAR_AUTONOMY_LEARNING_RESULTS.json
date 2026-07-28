@@ -1,0 +1,19 @@
+{
+  "title": "OTZAR_AUTONOMY_LEARNING_RESULTS",
+  "date": "2026-07-28",
+  "status": "DOCTRINE_ONLY_PARTIAL_SUBSTRATE",
+  "loop": "docs/ai/OTZAR_CONTINUOUS_IMPROVEMENT_CONTROL_LOOP.md",
+  "implemented_inputs": [
+    "corrections / preferences UI",
+    "action SUCCEEDED FAILED TIMED_OUT outcomes",
+    "explicit ActionPolicy rows"
+  ],
+  "not_implemented": [
+    "automatic routine promotion after N approvals",
+    "measured first-run vs second-run intervention delta",
+    "drift monitor for learned patterns"
+  ],
+  "learning_authority_expansions": 0,
+  "denied_patterns_learned": null,
+  "corrected_patterns_learned": null
+}

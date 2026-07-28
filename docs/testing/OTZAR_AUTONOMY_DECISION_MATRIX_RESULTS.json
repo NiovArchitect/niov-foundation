@@ -1,0 +1,42 @@
+{
+  "title": "OTZAR_AUTONOMY_DECISION_MATRIX_RESULTS",
+  "date": "2026-07-28",
+  "status": "SUBSTRATE_MAPPED_PARTIAL_RUNTIME",
+  "doctrine": "docs/ai/OTZAR_AUTONOMY_DECISION_MODEL.md",
+  "paths": {
+    "A_observe_organize": {
+      "status": "PARTIAL_LIVE",
+      "evidence": ["Today hierarchy", "collab receipts", "team-work", "extract APIs"]
+    },
+    "B_autonomous_low_risk": {
+      "status": "LIVE_PASS",
+      "evidence": [
+        "evaluateActionPolicy Rung 1 refined",
+        "RECORD_CAPSULE LOW + ActionPolicy AUTO_APPROVE under require_human_approval=true",
+        "terminal SUCCEEDED with proof summary"
+      ]
+    },
+    "C_learned_routine": {
+      "status": "FORWARD",
+      "evidence": ["work-style candidates partial", "no auto pattern promotion yet"]
+    },
+    "D_silent_draft": {
+      "status": "PARTIAL",
+      "evidence": ["transcript proposed actions", "extract-preview review-first"]
+    },
+    "E_exception_review": {
+      "status": "PARTIAL",
+      "evidence": ["OrgTruth conflicts", "Action Center approvals", "no unified exception Accept/Correct/Reject queue"]
+    },
+    "F_consequential_approval": {
+      "status": "LIVE_PARTIAL",
+      "evidence": ["dual-control when second admin exists", "honest block without second admin"]
+    },
+    "G_deny_block": {
+      "status": "LIVE_PARTIAL",
+      "evidence": ["policy FORBIDDEN", "OPERATION_NOT_PERMITTED", "cross-tenant gates"]
+    }
+  },
+  "learning_authority_expansions": 0,
+  "misinterpretation_rejected": "mandatory approve-every-extract"
+}

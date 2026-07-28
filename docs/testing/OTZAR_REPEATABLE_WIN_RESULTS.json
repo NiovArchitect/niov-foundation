@@ -1,0 +1,16 @@
+{
+  "title": "OTZAR_REPEATABLE_WIN_RESULTS",
+  "date": "2026-07-28",
+  "status": "PARTIAL_CANDIDATE_IDENTIFIED",
+  "candidate_workflow": "LOW RECORD_CAPSULE with explicit ActionPolicy under require_human_approval=true",
+  "first_run": {
+    "result": "SUCCEEDED",
+    "human_intervention_count": 0,
+    "notes": "Autonomous PATH B after policy + authority already present"
+  },
+  "second_run": {
+    "result": "NOT_RE_RUN_IN_THIS_PASS",
+    "human_intervention_count": null
+  },
+  "required": "Prove same workflow twice with intervention non-increasing"
+}

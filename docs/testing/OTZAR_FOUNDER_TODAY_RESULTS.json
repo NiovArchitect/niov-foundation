@@ -1,0 +1,30 @@
+{
+  "title": "OTZAR_FOUNDER_TODAY_RESULTS",
+  "date": "2026-07-28",
+  "status": "LIVE_BROWSER_PASS_HIERARCHY",
+  "control_tower_deploy_sha": "2806156268fab2e39bf4f59a44c74a581ccc7dca",
+  "app_bundle": "assets/index-Ba9sqDm9.js",
+  "pr": "https://github.com/NiovArchitect/otzar-control-tower/pull/225",
+  "contract": "docs/product/OTZAR_FOUNDER_TODAY_SIGNAL_CONTRACT.md",
+  "live_browser_markers": {
+    "what_matters_now": true,
+    "what_otzar_completed": true,
+    "completed_proof_capsule": true,
+    "ai_collab_completed": true,
+    "failed_honest": true,
+    "team_movement": true,
+    "communications_secondary_grouped": true,
+    "raw_19_replies_as_primary_needs_me": false,
+    "org_entry_softened": true,
+    "screenshot": "otzar-control-tower/screenshots/founder-experience-closure/founder-today-hierarchy-live.png"
+  },
+  "yc_ten_second_story": "Governed Work OS: humans control AI knowledge and action. Today leads with primary objective, completed governed work + AI collab + honest failure, team movement, then communications last.",
+  "remaining": [
+    "Candidate Accept/Correct/Reject product loop",
+    "Talk full grounded answer capture",
+    "Correction fanout multi-surface",
+    "Adversarial second-org browser",
+    "My Twin residual undefined string investigation",
+    "Calendar event runtime VIEW proof beyond copy"
+  ]
+}

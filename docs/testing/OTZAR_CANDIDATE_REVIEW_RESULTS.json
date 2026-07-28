@@ -1,14 +1,12 @@
 {
   "title": "OTZAR_CANDIDATE_REVIEW_RESULTS",
-  "date": "2026-07-27",
-  "status": "NOT_COMPLETE",
-  "extraction_backend": "PASS",
-  "accept_correct_reject_product_loop": "NOT_COMPLETE",
-  "surfaces": {
-    "transcript_action_review": "PARTIAL",
-    "org_truth_drawer": "PARTIAL",
-    "document_extract_preview": "PARTIAL",
-    "action_center_candidates_tab": "MISSING"
-  },
-  "product_doc": "docs/product/OTZAR_GOVERNED_CANDIDATE_REVIEW.md"
+  "date": "2026-07-28",
+  "status": "DOCTRINE_CORRECTED_PRODUCT_PARTIAL",
+  "model": "exception_layer_not_mandatory_checkpoint",
+  "doctrine": "docs/product/OTZAR_GOVERNED_CANDIDATE_REVIEW.md",
+  "paths": "docs/ai/OTZAR_AUTONOMY_DECISION_MODEL.md",
+  "candidates_accepted": 0,
+  "candidates_corrected": 0,
+  "candidates_rejected": 0,
+  "note": "Success metric is low routine interruption + complete exception tools — not volume of Accept clicks. Unified exception Accept/Correct/Reject queue still incomplete."
 }

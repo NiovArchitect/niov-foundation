@@ -1,0 +1,18 @@
+{
+  "title": "OTZAR_CALENDAR_LIFECYCLE_RESULTS",
+  "date": "2026-07-28",
+  "status": "HONEST_PARTIAL",
+  "ui_capability_copy": {
+    "view": "STATED",
+    "understand": "STATED",
+    "create": "NOT_ENABLED_IN_COPY",
+    "execute": "NOT_ENABLED_IN_COPY"
+  },
+  "runtime_proof": {
+    "view_event": "NOT_PROVEN_THIS_PASS",
+    "create": "NOT_PROVEN_THIS_PASS",
+    "update": "NOT_PROVEN_THIS_PASS",
+    "cancel": "NOT_PROVEN_THIS_PASS"
+  },
+  "note": "Founder previously observed create/update lifecycle — restore/prove in dedicated connector pass; do not claim from Connected badge alone"
+}
