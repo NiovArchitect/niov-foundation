@@ -606,11 +606,13 @@ export {
   AnthropicProvider,
   CircuitBreaker,
   FixtureBasedLLMProvider,
+  LLM_USER_SAFE_UNAVAILABLE,
   MockLLMProvider,
   OpenAIProvider,
   computeLLMInputHash,
   getLLMProvider,
   withCircuitBreaker,
+  withProviderFailover,
 } from "./services/llm/llm.service.js";
 export type {
   CircuitState,
