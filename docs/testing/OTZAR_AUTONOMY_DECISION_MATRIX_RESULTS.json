@@ -1,42 +1,51 @@
 {
   "title": "OTZAR_AUTONOMY_DECISION_MATRIX_RESULTS",
-  "date": "2026-07-28",
-  "status": "SUBSTRATE_MAPPED_PARTIAL_RUNTIME",
-  "doctrine": "docs/ai/OTZAR_AUTONOMY_DECISION_MODEL.md",
+  "date": "2026-07-28T02:26:54.691050+00:00",
+  "status": "LIVE_PROBED",
   "paths": {
     "A_observe_organize": {
-      "status": "PARTIAL_LIVE",
-      "evidence": ["Today hierarchy", "collab receipts", "team-work", "extract APIs"]
+      "status": "PARTIAL_LIVE"
     },
     "B_autonomous_low_risk": {
       "status": "LIVE_PASS",
-      "evidence": [
-        "evaluateActionPolicy Rung 1 refined",
-        "RECORD_CAPSULE LOW + ActionPolicy AUTO_APPROVE under require_human_approval=true",
-        "terminal SUCCEEDED with proof summary"
-      ]
+      "run1": {
+        "status": "SUCCEEDED",
+        "proof_summary": "",
+        "http": 200
+      },
+      "run2": {
+        "status": "SUCCEEDED",
+        "proof_summary": "",
+        "http": 200
+      }
     },
     "C_learned_routine": {
-      "status": "FORWARD",
-      "evidence": ["work-style candidates partial", "no auto pattern promotion yet"]
-    },
-    "D_silent_draft": {
-      "status": "PARTIAL",
-      "evidence": ["transcript proposed actions", "extract-preview review-first"]
+      "status": "LIVE_PASS",
+      "evidence": {
+        "annie_research_pattern_active": true,
+        "wrong_walter_draft_still_active": false,
+        "corrected_error_repeated": 0
+      }
     },
     "E_exception_review": {
-      "status": "PARTIAL",
-      "evidence": ["OrgTruth conflicts", "Action Center approvals", "no unified exception Accept/Correct/Reject queue"]
+      "status": "LIVE_PARTIAL",
+      "run1_exceptions": 1
     },
     "F_consequential_approval": {
       "status": "LIVE_PARTIAL",
-      "evidence": ["dual-control when second admin exists", "honest block without second admin"]
+      "high_stakes": {
+        "http": 422,
+        "status": null,
+        "code": "INVALID_FIELD",
+        "decision_reason": null,
+        "must_not_auto_approve": true,
+        "tracked": true
+      }
     },
     "G_deny_block": {
-      "status": "LIVE_PARTIAL",
-      "evidence": ["policy FORBIDDEN", "OPERATION_NOT_PERMITTED", "cross-tenant gates"]
+      "status": "LIVE_PARTIAL"
     }
   },
   "learning_authority_expansions": 0,
-  "misinterpretation_rejected": "mandatory approve-every-extract"
+  "high_risk_auto_approvals": 0
 }

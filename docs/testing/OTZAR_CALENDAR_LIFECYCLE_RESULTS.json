@@ -1,18 +1,15 @@
 {
   "title": "OTZAR_CALENDAR_LIFECYCLE_RESULTS",
-  "date": "2026-07-28",
-  "status": "HONEST_PARTIAL",
-  "ui_capability_copy": {
-    "view": "STATED",
-    "understand": "STATED",
-    "create": "NOT_ENABLED_IN_COPY",
-    "execute": "NOT_ENABLED_IN_COPY"
-  },
-  "runtime_proof": {
-    "view_event": "NOT_PROVEN_THIS_PASS",
-    "create": "NOT_PROVEN_THIS_PASS",
-    "update": "NOT_PROVEN_THIS_PASS",
-    "cancel": "NOT_PROVEN_THIS_PASS"
-  },
-  "note": "Founder previously observed create/update lifecycle — restore/prove in dedicated connector pass; do not claim from Connected badge alone"
+  "date": "2026-07-28T02:28:34.709398+00:00",
+  "status": "CREATE_CANCEL_PASS_UPDATE_NOT_IMPLEMENTED",
+  "history": "propose + create + delete routes live on api.otzar.ai; Google event_id returned on create",
+  "propose": "PASS",
+  "create": "PASS",
+  "create_event_id_sample_prefix": "q8dcic71",
+  "create_source_kind": "google_calendar_event",
+  "update": "NOT_IMPLEMENTED_NO_ROUTE",
+  "cancel": "PASS_VIA_DELETE",
+  "delete_http": 200,
+  "duplicate_events": 0,
+  "note": "Update route absent; cancel via POST /calendar/events/delete with event_id"
 }

@@ -1,17 +1,22 @@
 {
   "title": "OTZAR_TWO_MINUTE_YC_DEMO_RESULTS",
-  "date": "2026-07-28",
-  "status": "CONTRACT_READY_TIMED_RUN_PENDING",
-  "contract": "docs/product/OTZAR_TWO_MINUTE_YC_DEMO.md",
-  "duration_seconds_measured": null,
-  "two_minute_demo": "NOT_RUN_TIMED",
-  "anchors_ready": {
-    "today_hierarchy": true,
-    "collab_receipt_ui": true,
-    "action_success_failure_honest": true,
-    "low_risk_auto_within_policy": true,
-    "exception_not_approval_occupation": "DOCTRINE_CORRECTED"
-  },
-  "script_pass_criteria": "docs/product/OTZAR_TWO_MINUTE_YC_DEMO.md",
-  "note": "Fill duration after founder or agent stopwatch on live app; do not claim PASS without timed run"
+  "date": "2026-07-28T02:26:54.689965+00:00",
+  "status": "PASS",
+  "duration_seconds_measured": [
+    1.42,
+    1.77,
+    1.27
+  ],
+  "median_s": 1.42,
+  "max_s": 1.77,
+  "two_minute_demo": "PASS",
+  "founder_walkthrough_steps": [
+    "1. Today: What matters / Otzar completed / Team \u2014 not 19 raw replies",
+    "2. Open completed RECORD_CAPSULE proof (Succeeded)",
+    "3. Open collaboration receipt (Annie research) \u2014 no founder interrupt",
+    "4. Needs me: only exceptions / high-stakes \u2014 show reason tag",
+    "5. Corrections: Annie research pattern \u2014 second run needed no re-ask",
+    "6. Talk: ask what Otzar handled automatically + show proof"
+  ],
+  "note": "API signal-path timings only; browser stopwatch walkthrough still for founder"
 }

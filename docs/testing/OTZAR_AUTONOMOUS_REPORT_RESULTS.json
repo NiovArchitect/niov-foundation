@@ -1,21 +1,39 @@
 {
   "title": "OTZAR_AUTONOMOUS_REPORT_RESULTS",
-  "date": "2026-07-28",
-  "status": "PARTIAL_LIVE_PROJECTIONS",
-  "doctrine": "docs/product/OTZAR_AUTONOMOUS_REPORTING_AND_KPI_SYSTEM.md",
-  "autonomous_reports": {
-    "founder_today_hierarchy": "LIVE",
-    "team_movement": "LIVE",
-    "action_lifecycle_needs_me": "LIVE",
-    "manager_pack": "PARTIAL",
-    "executive_exception_rate_kpi": "FORWARD"
+  "date": "2026-07-28T02:26:54.689351+00:00",
+  "status": "PARTIAL_GROUNDED",
+  "kpi": {
+    "routine_items_organized": 2,
+    "autonomous_actions_completed": 2,
+    "ai_collaborations_completed": 0,
+    "exceptions_routed": 1,
+    "human_interventions": 2,
+    "successful_results": 2,
+    "failures": 0,
+    "proof_records": 2,
+    "first_run_cycle_time_s": 52.77,
+    "second_run_cycle_time_s": 59.64,
+    "time_saved": "NOT_CLAIMED",
+    "sources": [
+      "POST /actions RECORD_CAPSULE terminal status",
+      "POST /otzar/my-twin/corrections",
+      "POST /otzar/my-twin/collaboration-requests",
+      "GET /actions list status histogram"
+    ]
   },
-  "kpi_sources": [
-    "actions list statuses",
-    "team-work open obligations",
-    "collaboration COMPLETED receipts",
-    "presence approval counts",
-    "handoff lists"
-  ],
-  "fabricated_metrics": false
+  "metrics": {
+    "FIRST_RUN_HUMAN_INTERVENTIONS": 2,
+    "SECOND_RUN_HUMAN_INTERVENTIONS": 0,
+    "SECOND_RUN_INTERVENTION_REDUCTION": 2,
+    "CORRECTED_ERROR_REPEATED": 0,
+    "LEARNING_AUTHORITY_EXPANSIONS": 0,
+    "RUN1_AUTONOMOUS_ACTIONS": 1,
+    "RUN2_AUTONOMOUS_ACTIONS": 1,
+    "RUN1_AI_COLLABORATIONS": 0,
+    "RUN2_AI_COLLABORATIONS": 0,
+    "RUN1_PROOF_RECORDS": 1,
+    "RUN2_PROOF_RECORDS": 1,
+    "TIME_SAVED": "NOT_CLAIMED"
+  },
+  "time_saved": "NOT_CLAIMED"
 }
