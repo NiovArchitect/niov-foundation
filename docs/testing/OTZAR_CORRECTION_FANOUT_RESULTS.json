@@ -1,0 +1,31 @@
+{
+  "title": "OTZAR_CORRECTION_FANOUT_RESULTS",
+  "date": "2026-07-27",
+  "status": "NOT_PROVEN",
+  "corrected_truth": "Annie is Senior Engineer and Researcher (not compliance-role owner)",
+  "persisted": true,
+  "surfaces": {
+    "today": "NOT_PROVEN",
+    "founder_team_status": "NOT_PROVEN",
+    "annie_people_profile": "NOT_PROVEN",
+    "annie_work_context": "NOT_PROVEN",
+    "david_dependency": "NOT_PROVEN",
+    "project_risk": "NOT_PROVEN",
+    "talk_answer": "NOT_PROVEN",
+    "action_center": "NOT_PROVEN",
+    "notifications": "NOT_PROVEN",
+    "memory_current_truth": "NOT_PROVEN"
+  },
+  "requirements_unchecked": [
+    "old_statement_not_displayed_as_current",
+    "original_retained_in_history",
+    "accepted_correction_source_visible",
+    "affected_obligation_updated",
+    "talk_answer_changed",
+    "founder_summary_changed",
+    "affected_users_notified",
+    "no_duplicate_obligation",
+    "no_unauthorized_personal_memory_modification"
+  ],
+  "note": "Backend correction persisted in prior arc; multi-surface fanout requires authenticated browser + Talk grounding proof."
+}

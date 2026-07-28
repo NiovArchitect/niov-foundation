@@ -1,0 +1,14 @@
+{
+  "title": "OTZAR_CANDIDATE_REVIEW_RESULTS",
+  "date": "2026-07-27",
+  "status": "NOT_COMPLETE",
+  "extraction_backend": "PASS",
+  "accept_correct_reject_product_loop": "NOT_COMPLETE",
+  "surfaces": {
+    "transcript_action_review": "PARTIAL",
+    "org_truth_drawer": "PARTIAL",
+    "document_extract_preview": "PARTIAL",
+    "action_center_candidates_tab": "MISSING"
+  },
+  "product_doc": "docs/product/OTZAR_GOVERNED_CANDIDATE_REVIEW.md"
+}
