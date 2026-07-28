@@ -1,22 +1,17 @@
 {
   "title": "OTZAR_TWO_MINUTE_YC_DEMO_RESULTS",
-  "date": "2026-07-28T02:26:54.689965+00:00",
+  "date": "2026-07-28T02:56:19.956Z",
   "status": "PASS",
   "duration_seconds_measured": [
-    1.42,
-    1.77,
-    1.27
+    13,
+    12,
+    12
   ],
-  "median_s": 1.42,
-  "max_s": 1.77,
+  "median_s": 12,
+  "max_s": 13,
   "two_minute_demo": "PASS",
-  "founder_walkthrough_steps": [
-    "1. Today: What matters / Otzar completed / Team \u2014 not 19 raw replies",
-    "2. Open completed RECORD_CAPSULE proof (Succeeded)",
-    "3. Open collaboration receipt (Annie research) \u2014 no founder interrupt",
-    "4. Needs me: only exceptions / high-stakes \u2014 show reason tag",
-    "5. Corrections: Annie research pattern \u2014 second run needed no re-ask",
-    "6. Talk: ask what Otzar handled automatically + show proof"
-  ],
-  "note": "API signal-path timings only; browser stopwatch walkthrough still for founder"
+  "mode": "LIVE_BROWSER_STOPWATCH",
+  "note": "Full browser navigation stopwatch — not API signal path",
+  "public_exception_ui": "PASS",
+  "repeatable_win_visible": "PARTIAL"
 }
