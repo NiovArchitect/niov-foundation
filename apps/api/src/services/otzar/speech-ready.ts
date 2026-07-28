@@ -90,14 +90,13 @@ export function toSpeechReadyText(input: string): string {
 }
 
 // WHAT: Compute whether the Foundation tier exposes live audio output
-//        today. Mirrors the voice_readiness_state sidecar's
-//        `live_audio_output` value — `LIVE` ⇒ true; otherwise false.
+//        today. Premium TTS is LIVE via POST /otzar/voice/speak
+//        (xAI Orion primary → ElevenLabs authorized fallback).
 // INPUT: None (constant projection at the Foundation tier).
-// OUTPUT: Boolean.
-// WHY: The substrate gate is uniform across callers today (per ADR-0085
-//      + ADR-0089: live audio output remains forward-substrate Founder-
-//      gated). Lets the UI hide / disable a "speak aloud" affordance
-//      that would otherwise produce no audio.
+// OUTPUT: Boolean — true when the speak route is product-ready.
+// WHY: Founder P0 Orion path is production-wired. UI must offer Play
+//      when speech_ready_text is present; keys stay server-side.
+//      Env absence is handled at speak-time (503), not by hiding Play.
 export function computeVoiceOutputSupported(): boolean {
-  return false;
+  return true;
 }

@@ -1,0 +1,38 @@
+{
+  "title": "OTZAR — CONCISE PROFESSIONAL RESPONSE AND ORION IDENTITY RELEASE",
+  "date": "2026-07-28",
+  "status": "CODE_LANDED_AWAITING_DEPLOY_AND_FOUNDER_REVIEW",
+  "long_winded_root_cause": [
+    "System prompt lacked mandatory answer-first brevity contract; model defaulted to essay-style assistant prose.",
+    "No post-LLM polish for common filler openings/trailers.",
+    "speech_ready_text previously passed full sanitized response to TTS (essays spoken aloud).",
+    "computeVoiceOutputSupported() hard-false while premium /speak existed (UI/contract drift)."
+  ],
+  "voice_mismatch_root_cause": [
+    "Control Tower PREMIUM_TIMEOUT_MS=7000 aborted slow Orion TTS and silently invoked browser SpeechSynthesis.",
+    "speakWithOtzarVoice always called deviceFallback on premium failure with no allowDeviceFallback gate.",
+    "Client used /tts-preview alias (functionally ok) but path telemetry did not emphasize canonical /speak.",
+    "Founder heard robotic browser voice while UI implied premium/Orion."
+  ],
+  "response_policy": "RESPONSE_BREVITY_SYSTEM_STRIP + polishResponseBrevity + toSpokenSummary(45 words). Answer first; 1–3 sentences default; detail only on request.",
+  "default_style": "Sharp chief-of-staff / senior operator. Direct answer → implication → one next action max.",
+  "foundation_changes": [
+    "apps/api/src/services/otzar/response-brevity.ts NEW",
+    "apps/api/src/services/otzar/otzar.service.ts — strip + polish + spoken summary",
+    "apps/api/src/services/otzar/speech-ready.ts — voice_output_supported true (premium live)",
+    "tests/unit/response-brevity.test.ts NEW",
+    "speech-ready + otzar unit + voice-ready integration expect voice_output_supported true"
+  ],
+  "control_tower_changes": [
+    "voice-playback-controller: PREMIUM_TIMEOUT_MS 7s→20s",
+    "route: POST /otzar/voice/speak canonical",
+    "allowDeviceFallback default false — no silent browser robot",
+    "logs X-Voice-Provider + X-Voice-Id",
+    "AmbientOtzarBar / Voice / Welcome production paths block device fallback",
+    "VoiceProviders Hear-it allows labeled device only after premium fail"
+  ],
+  "caretaker_relay_touched": "NO",
+  "background_workers": 0,
+  "founder_experience": "AWAITING REVIEW",
+  "yc_release_candidate": "NOT READY UNTIL FOUNDER APPROVAL"
+}

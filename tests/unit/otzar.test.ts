@@ -479,12 +479,11 @@ describe("conductSession", () => {
   );
 
   // Phase EDX-3 slice 3: `speech_ready_text` is the response sanitized
-  // for TTS / device speech; `voice_output_supported` mirrors the
-  // EDX-1 voice_readiness_state.live_audio_output (false at the
-  // Foundation tier today per ADR-0085 + ADR-0089).
+  // then spoken-summarized for TTS; `voice_output_supported` is true
+  // now that premium /otzar/voice/speak (Orion) is production-wired.
   it(
     "[EDX-3] speech_ready_text + voice_output_supported are present " +
-      "on happy path (false at the Foundation tier)",
+      "on happy path (premium voice supported)",
     async () => {
       const { auth, otzar } = makeServices({
         llm: makeFixtureProvider("unit-otzar-conduct-session-happy-path"),
@@ -501,7 +500,7 @@ describe("conductSession", () => {
       if (!result.ok) return;
       // Fields are present and shape-correct.
       expect(typeof result.speech_ready_text).toBe("string");
-      expect(result.voice_output_supported).toBe(false);
+      expect(result.voice_output_supported).toBe(true);
       // Sanitization is non-destructive — at minimum the sanitized
       // text is non-empty whenever the LLM response is non-empty.
       if (result.response.length > 0) {
