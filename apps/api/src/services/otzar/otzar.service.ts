@@ -1731,11 +1731,23 @@ export class OtzarService {
     if (!llmResult.ok) {
       // Provider failed AFTER the claim → FAILED_RETRYABLE so a retry reclaims the
       // request immediately (never refuse a legitimate retry as still-in-progress).
+      // User-facing message is intentionally generic: never leak vendor names,
+      // credit balances, model ids, or raw SDK bodies (YC-safe Talk copy).
       await this.abortRequest(requestLease, false, "LLM_UNAVAILABLE");
+      logger.warn(
+        {
+          provider: llmResult.provider,
+          code: llmResult.code,
+          // Truncate internal detail for logs only — never returned to clients.
+          detail: (llmResult.fallback_message ?? "").slice(0, 200),
+        },
+        "otzar.conductSession: LLM unavailable after failover path",
+      );
       return {
         ok: false,
         code: "LLM_UNAVAILABLE",
-        message: llmResult.fallback_message,
+        message:
+          "Otzar could not finish that answer right now. Please try again in a moment.",
       };
     }
 

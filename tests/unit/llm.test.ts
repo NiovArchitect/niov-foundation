@@ -13,8 +13,10 @@
 import { describe, expect, it } from "vitest";
 import {
   CircuitBreaker,
+  LLM_USER_SAFE_UNAVAILABLE,
   MockLLMProvider,
   withCircuitBreaker,
+  withProviderFailover,
   type LLMResult,
 } from "@niov/api";
 
@@ -136,5 +138,85 @@ describe("CircuitBreaker -- failures outside the rolling window do NOT count", (
     await wrapped.generateResponse({ system: "", user: "" });
     await wrapped.generateResponse({ system: "", user: "" });
     expect(wrapped.breaker.getState()).toBe("CLOSED");
+  });
+});
+
+// WHAT: Governed cross-provider failover for Talk / voice.
+// WHY: When the primary vendor is unavailable (credits, rate-limit,
+//      circuit open, 5xx), the secondary must answer with the SAME
+//      system/user/context args — no ungrounded alternate path.
+describe("withProviderFailover -- primary failure uses secondary", () => {
+  it("returns secondary success and reports secondary provider name", async () => {
+    const primary = new MockLLMProvider([FAILURE]);
+    const secondaryOk: LLMResult = {
+      ok: true,
+      text: "grounded secondary answer",
+      provider: "secondary-mock",
+      model: "secondary-1",
+    };
+    const secondary = new MockLLMProvider([secondaryOk]);
+    const composed = withProviderFailover(primary, secondary);
+    const args = {
+      system: "governed system",
+      user: "What is the HelioGrid decision?",
+      context: "wallet-scoped context",
+    };
+    const r = await composed.generateResponse(args);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.text).toBe("grounded secondary answer");
+      expect(r.provider).toBe("secondary-mock");
+      expect(r.model).toBe("secondary-1");
+    }
+    // Both providers received identical governed args (context parity).
+    expect(primary.getCalls()).toEqual([args]);
+    expect(secondary.getCalls()).toEqual([args]);
+  });
+
+  it("does not call secondary when primary succeeds", async () => {
+    const primary = new MockLLMProvider([SUCCESS]);
+    const secondary = new MockLLMProvider([
+      {
+        ok: true,
+        text: "should-not-run",
+        provider: "secondary-mock",
+        model: "secondary-1",
+      },
+    ]);
+    const composed = withProviderFailover(primary, secondary);
+    const r = await composed.generateResponse({ system: "s", user: "u" });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.text).toBe("ok");
+      expect(r.provider).toBe("mock");
+    }
+    expect(secondary.getCalls()).toHaveLength(0);
+  });
+
+  it("returns user-safe copy when both providers fail (no vendor leak)", async () => {
+    const primary = new MockLLMProvider([
+      {
+        ok: false,
+        code: "PROVIDER_ERROR",
+        fallback_message: "Anthropic credit balance too low",
+        provider: "anthropic",
+      },
+    ]);
+    const secondary = new MockLLMProvider([
+      {
+        ok: false,
+        code: "PROVIDER_ERROR",
+        fallback_message: "OpenAI rate limit",
+        provider: "openai",
+      },
+    ]);
+    const composed = withProviderFailover(primary, secondary);
+    const r = await composed.generateResponse({ system: "s", user: "u" });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.code).toBe("PROVIDER_ERROR");
+      expect(r.fallback_message).toBe(LLM_USER_SAFE_UNAVAILABLE);
+      expect(r.fallback_message).not.toMatch(/Anthropic|OpenAI|credit|rate/i);
+    }
   });
 });

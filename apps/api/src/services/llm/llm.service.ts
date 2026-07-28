@@ -308,29 +308,112 @@ export class OpenAIProvider implements LLMProvider {
   }
 }
 
+// WHAT: User-safe failure copy. NEVER surface vendor names, credit
+//        balances, model ids, or raw SDK bodies to employees.
+// INPUT: None.
+// OUTPUT: A stable string safe for Talk / voice UI.
+// WHY: Provider outages must be honest without becoming technical theater.
+export const LLM_USER_SAFE_UNAVAILABLE =
+  "Otzar could not finish that answer right now. Please try again in a moment.";
+
+// WHAT: Compose primary + secondary providers so a primary outage
+//        (credits, rate-limit, 5xx, circuit open) fails over to the
+//        secondary without changing caller contracts.
+// INPUT: primary and secondary LLMProviders (each already
+//        circuit-breaker wrapped when used from getLLMProvider).
+// OUTPUT: An LLMProvider that tries primary then secondary.
+// WHY: Talk must not depend on a single vendor when both keys are
+//      configured. Same system/user/context args are used for both —
+//      governance and grounding are caller-side and unchanged.
+export function withProviderFailover(
+  primary: LLMProvider,
+  secondary: LLMProvider,
+): LLMProvider {
+  return {
+    name: `${primary.name}+${secondary.name}`,
+    async generateResponse(args, opts) {
+      const first = await primary.generateResponse(args, opts);
+      if (first.ok) return first;
+      const second = await secondary.generateResponse(args, opts);
+      if (second.ok) {
+        return {
+          ok: true,
+          text: second.text,
+          // Report which provider answered for audit-safe telemetry.
+          provider: second.provider,
+          model: second.model,
+        };
+      }
+      return {
+        ok: false,
+        code: "PROVIDER_ERROR",
+        fallback_message: LLM_USER_SAFE_UNAVAILABLE,
+        provider: primary.name,
+      };
+    },
+  };
+}
+
+function tryBuildProvider(
+  kind: "anthropic" | "openai",
+): LLMProvider | null {
+  try {
+    if (kind === "openai") {
+      if (!process.env.OPENAI_API_KEY) return null;
+      return withCircuitBreaker(new OpenAIProvider());
+    }
+    if (!process.env.ANTHROPIC_API_KEY) return null;
+    return withCircuitBreaker(new AnthropicProvider());
+  } catch {
+    return null;
+  }
+}
+
 // WHAT: Pick the production LLM provider per env config.
 // INPUT: None (reads LLM_PROVIDER or PREFERRED_LLM env, defaults to "anthropic").
-// OUTPUT: A circuit-breaker-wrapped LLMProvider.
+// OUTPUT: A circuit-breaker-wrapped LLMProvider, with cross-provider
+//         failover when BOTH keys are present.
 // WHY: Single factory used by buildApp's production path. Tests
 //      construct providers + breakers directly with injected clocks.
 //
-//      Env precedence:
+//      Env precedence for PRIMARY:
 //        1. LLM_PROVIDER (Founder-facing canonical name; preferred)
 //        2. PREFERRED_LLM (legacy; preserved for back-compat)
 //        3. "anthropic" hard-coded default
+//
+//      When the non-primary provider's API key is also set, returns
+//      withProviderFailover(primary, secondary). Callers see one
+//      LLMProvider; Talk / voice / extract paths do not change.
 export function getLLMProvider(): LLMProvider {
   const preferred = (
     process.env.LLM_PROVIDER ?? process.env.PREFERRED_LLM ?? "anthropic"
   ).toLowerCase();
-  if (preferred === "openai") {
-    return withCircuitBreaker(new OpenAIProvider());
+  if (preferred !== "openai" && preferred !== "anthropic") {
+    throw new Error(
+      `getLLMProvider: unknown PREFERRED_LLM "${preferred}" (expected "anthropic" or "openai")`,
+    );
   }
-  if (preferred === "anthropic") {
-    return withCircuitBreaker(new AnthropicProvider());
+  const primaryKind: "anthropic" | "openai" =
+    preferred === "openai" ? "openai" : "anthropic";
+  const secondaryKind: "anthropic" | "openai" =
+    primaryKind === "openai" ? "anthropic" : "openai";
+
+  const primary = tryBuildProvider(primaryKind);
+  if (primary === null) {
+    // Primary missing key — fall through to secondary alone if available.
+    const onlySecondary = tryBuildProvider(secondaryKind);
+    if (onlySecondary === null) {
+      throw new Error(
+        `getLLMProvider: no LLM API keys configured (need ANTHROPIC_API_KEY and/or OPENAI_API_KEY)`,
+      );
+    }
+    return onlySecondary;
   }
-  throw new Error(
-    `getLLMProvider: unknown PREFERRED_LLM "${preferred}" (expected "anthropic" or "openai")`,
-  );
+  const secondary = tryBuildProvider(secondaryKind);
+  if (secondary === null) {
+    return primary;
+  }
+  return withProviderFailover(primary, secondary);
 }
 
 // WHAT: Test fixture -- a fully-scripted LLMProvider whose responses
