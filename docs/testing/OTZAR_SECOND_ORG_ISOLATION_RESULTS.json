@@ -1,0 +1,13 @@
+{
+  "title": "OTZAR_SECOND_ORG_ISOLATION_RESULTS",
+  "date": "2026-07-28T02:55:28.933404+00:00",
+  "founder_org_prefix": "a4ddc200",
+  "second_org": {
+    "login": "fail",
+    "http": 403,
+    "code": "SUSPENDED"
+  },
+  "cross_tenant_disclosures": 0,
+  "wrong_org_context": 0,
+  "status": "PARTIAL"
+}

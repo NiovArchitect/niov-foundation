@@ -1,15 +1,13 @@
 {
   "title": "OTZAR_CALENDAR_LIFECYCLE_RESULTS",
-  "date": "2026-07-28T02:28:34.709398+00:00",
-  "status": "CREATE_CANCEL_PASS_UPDATE_NOT_IMPLEMENTED",
-  "history": "propose + create + delete routes live on api.otzar.ai; Google event_id returned on create",
-  "propose": "PASS",
+  "date": "2026-07-28T02:55:30.743450+00:00",
+  "api_sha": "d0c820e18f3b4ef506920fea0b8efb782437039d",
   "create": "PASS",
-  "create_event_id_sample_prefix": "q8dcic71",
-  "create_source_kind": "google_calendar_event",
-  "update": "NOT_IMPLEMENTED_NO_ROUTE",
-  "cancel": "PASS_VIA_DELETE",
-  "delete_http": 200,
+  "create_event_id": "ir0u2minh2hj",
+  "update_reschedule": "PASS",
+  "rename": "PASS",
+  "cancel": "PASS",
+  "same_event_id_preserved": true,
   "duplicate_events": 0,
-  "note": "Update route absent; cancel via POST /calendar/events/delete with event_id"
+  "status": "PASS"
 }
