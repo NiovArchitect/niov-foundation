@@ -15,6 +15,7 @@ import { getOrgEntityId } from "../services/governance/org.js";
 import {
   proposeCalendarEvent,
   createCalendarEvent,
+  updateCalendarEvent,
   deleteCalendarEvent,
   type CalendarEventProposalInput,
   type ProposedParticipant,
@@ -191,6 +192,87 @@ export async function registerCalendarEventRoutes(
         end: result.end,
         project_id: result.project_id,
         already_applied: result.already_applied,
+      });
+    },
+  );
+
+  // ── Update/reschedule/rename (preserves event_id; no second insert) ──
+  app.post<{
+    Body: {
+      event_id?: unknown;
+      calendar_id?: unknown;
+      title?: unknown;
+      selected_time?: unknown;
+    };
+  }>(
+    "/api/v1/calendar/events/update",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const session = await authService.validateSession(token, "write");
+      if (!session.valid)
+        return reply.code(401).send({ ok: false, code: session.code });
+      const orgEntityId = await resolveOrgOrFail(session.entity_id, reply);
+      if (orgEntityId === null) return;
+
+      const body = request.body ?? {};
+      const eventId =
+        typeof body.event_id === "string" && body.event_id.length > 0
+          ? body.event_id
+          : null;
+      if (eventId === null) {
+        return reply
+          .code(422)
+          .send({ ok: false, code: "INVALID_REQUEST", message: "event_id is required" });
+      }
+      let selected_time: SelectedTime | null = null;
+      const st = body.selected_time as Record<string, unknown> | undefined;
+      if (
+        st !== undefined &&
+        st !== null &&
+        typeof st.start === "string" &&
+        typeof st.end === "string"
+      ) {
+        selected_time = { start: st.start, end: st.end };
+      }
+      const result = await updateCalendarEvent({
+        actor_entity_id: session.entity_id,
+        org_entity_id: orgEntityId,
+        input: {
+          event_id: eventId,
+          ...(typeof body.calendar_id === "string" && body.calendar_id.length > 0
+            ? { calendar_id: body.calendar_id }
+            : {}),
+          ...(typeof body.title === "string" && body.title.length > 0
+            ? { title: body.title }
+            : {}),
+          ...(selected_time !== null ? { selected_time } : {}),
+        },
+      });
+      if (result.ok === false) {
+        const status =
+          result.code === "PROVIDER_ERROR"
+            ? 502
+            : result.code === "EVENT_NOT_FOUND"
+              ? 404
+              : result.code === "INVALID_REQUEST"
+                ? 422
+                : result.code === "EVENT_WRITE_SCOPE_MISSING"
+                  ? 409
+                  : 409;
+        return reply.code(status).send({ ok: false, code: result.code });
+      }
+      return reply.code(200).send({
+        ok: true,
+        status: result.status,
+        source_kind: "google_calendar_event",
+        event_id: result.event_id,
+        calendar_id: result.calendar_id,
+        html_link: result.html_link,
+        start: result.start,
+        end: result.end,
+        title: result.title,
       });
     },
   );
