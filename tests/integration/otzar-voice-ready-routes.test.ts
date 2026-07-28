@@ -122,7 +122,7 @@ describe("POST /api/v1/otzar/my-twin/voice-intents", () => {
     expect(body.ok).toBe(true);
     expect(typeof body.response).toBe("string");
     expect(typeof body.speech_ready_text).toBe("string");
-    expect(body.voice_output_supported).toBe(false);
+    expect(body.voice_output_supported).toBe(true);
     expect(body.next_step).toBe("ANSWERED");
     expect(typeof body.memory_used_summary.total_capsules).toBe("number");
     // The route's signature field.

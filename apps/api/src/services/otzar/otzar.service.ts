@@ -229,6 +229,11 @@ import {
   toSpeechReadyText,
 } from "./speech-ready.js";
 import {
+  RESPONSE_BREVITY_SYSTEM_STRIP,
+  polishResponseBrevity,
+  toSpokenSummary,
+} from "./response-brevity.js";
+import {
   detectApprovalRequirement,
   type ApprovalReason,
 } from "./approval-detection.js";
@@ -1704,6 +1709,8 @@ export class OtzarService {
       // [OTZAR-CONTINUITY P1] Server-grounded current date/time/timezone so the
       // model never invents a date (the "January 2025" failure). Authoritative.
       temporalPromptLine(temporalCtx),
+      // Founder P0: concise professional default — answer first, no essays.
+      RESPONSE_BREVITY_SYSTEM_STRIP,
       truncated.final.priming,
       L_ALIGNMENT,
       // Slice E — grounded work context (outside the truncation budget; "" unless
@@ -1764,7 +1771,8 @@ export class OtzarService {
         open_obligation_titles: dgiCoherence.open_obligation_titles,
       },
     });
-    const responseText = accuracy.text;
+    // Brevity polish after accuracy guard — strip filler without changing facts.
+    const responseText = polishResponseBrevity(accuracy.text);
     if (accuracy.corrected) {
       logger.info(
         { reasons: accuracy.reasons, org: orgEntityId },
@@ -1872,17 +1880,15 @@ export class OtzarService {
     // without guessing.
     const correctionCaptureAvailable = true;
 
-    // Phase EDX-3 slice 3: speech-ready projection of the response
-    // text + voice-output-supported signal. `toSpeechReadyText` is a
-    // pure markdown / code / link stripper that produces text safe
-    // to hand to a downstream TTS or client-side device speech
-    // engine. `computeVoiceOutputSupported` mirrors the EDX-1
-    // voice_readiness_state.live_audio_output value (false at the
-    // Foundation tier today per ADR-0085 + ADR-0089) so the UI can
-    // hide / disable a "speak aloud" affordance that would produce
-    // no audio while still letting the speech-ready text reach
-    // future audio consumers.
-    const speechReadyText = toSpeechReadyText(responseText);
+    // Speech path: markdown-stripped text then SHORT spoken summary.
+    // Voice must not read the full on-screen essay (Founder P0).
+    // Screen keeps `response`; TTS consumers use `speech_ready_text`.
+    const speechReadyText = toSpokenSummary(
+      toSpeechReadyText(responseText),
+      45,
+    );
+    // Premium path is /otzar/voice/speak (xAI Orion primary). Flag stays
+    // true when the speech-ready substrate is healthy so UI can offer Play.
     const voiceOutputSupported = computeVoiceOutputSupported();
 
     // Phase EDX-4 PR 4 — conservative deterministic verb-scan over

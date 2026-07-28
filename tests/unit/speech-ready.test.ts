@@ -117,10 +117,10 @@ describe("toSpeechReadyText", () => {
 });
 
 describe("computeVoiceOutputSupported", () => {
-  it("returns false at the Foundation tier today (ADR-0085 + ADR-0089)", () => {
-    // Live audio output remains forward-substrate Founder-gated per the
-    // EDX-1 voice_readiness_state sidecar contract (live_audio_output =
-    // NOT_AVAILABLE_AT_FOUNDATION_TIER). This boolean mirrors that fact.
-    expect(computeVoiceOutputSupported()).toBe(false);
+  it("returns true — premium TTS live via /otzar/voice/speak (Orion)", () => {
+    // Founder P0: xAI Orion premium path is production-wired. Play UI
+    // must surface when speech_ready_text is present.
+    expect(computeVoiceOutputSupported()).toBe(true);
   });
 });
+
