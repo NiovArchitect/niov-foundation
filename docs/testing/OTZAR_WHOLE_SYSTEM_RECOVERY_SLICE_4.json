@@ -1,0 +1,40 @@
+{
+  "title": "OTZAR — WHOLE-SYSTEM RECOVERY SLICE 4",
+  "date": "2026-07-29",
+  "status": "SHIPPING",
+  "foundation_source_deploy": "pending",
+  "control_tower_source_deploy": "pending",
+  "app_bundle": "pending",
+  "memory_root_causes": [
+    "Primary UI led with storage counts (100 memory records) instead of useful learning",
+    "transcript_summaries_count only counted Fathom-prefixed capsules — missed CONVERSATION_LEARNING",
+    "Collaboration inbound/outbound counts presented as primary value",
+    "Long teach/consent forms competed with natural Talk learning"
+  ],
+  "conversation_history_root_causes": [
+    "Conversation history previously routed to /app/voice (hardware/capture roadmap)",
+    "listConversations returned metadata only — no title/summary preview",
+    "auto-close summaries used UUID-bearing strings",
+    "ACTIVE Talk sessions without close had no preview"
+  ],
+  "zero_summary_defect": {
+    "root_cause": "Memory count used [TRANSCRIPT-FATHOM] prefix only; list API omitted summary_capsule; auto-close summary was UUID text",
+    "fix": "Count CONVERSATION_LEARNING; enrich list with summary_preview + turn preview; human auto-close summaries"
+  },
+  "shipped": {
+    "memory_heading": "How Otzar works better for you",
+    "sections": ["Helping you now", "Recently learned", "Needs your decision", "Portable profile"],
+    "storage_counts": "secondary details only",
+    "talk_learning": "detectTalkPreference → immediate correction for personal prefs",
+    "portable_request": "Requested lifecycle; never client-side Ready",
+    "conversation_history": "titles + search + summaries; no hardware roadmap",
+    "voice_page": "device matrix under Advanced device notes"
+  },
+  "slice_2_backend_obligations_open": true,
+  "slice_3_external_obligations_open": true,
+  "caretaker_relay_touched": "NO",
+  "background_workers": 0,
+  "whole_system_recovery": "IN PROGRESS",
+  "next_automatic_slice": "ADMIN SETUP, HIERARCHY, GOVERNANCE, RETENTION, REPORTS, AND KPIS",
+  "founder_experience": "AWAITING FINAL WHOLE-SYSTEM REVIEW"
+}

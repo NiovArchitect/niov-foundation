@@ -195,6 +195,10 @@ export async function buildIdentityContext(
             payload_summary: { not: { startsWith: "[TRANSCRIPT-FATHOM]" } },
           },
         });
+  // Slice 4 — "conversation summaries" must count real Talk learning,
+  // not only Fathom-prefixed meeting imports. Root cause of founder
+  // "0 conversation summaries after real Talk": CONVERSATION_LEARNING
+  // capsules from closeConversation / auto-close were invisible here.
   const transcriptSummariesCount =
     wallet === null
       ? 0
@@ -202,7 +206,10 @@ export async function buildIdentityContext(
           where: {
             wallet_id: wallet.wallet_id,
             deleted_at: null,
-            payload_summary: { startsWith: "[TRANSCRIPT-FATHOM]" },
+            OR: [
+              { capsule_type: "CONVERSATION_LEARNING" },
+              { payload_summary: { startsWith: "[TRANSCRIPT-FATHOM]" } },
+            ],
           },
         });
 
