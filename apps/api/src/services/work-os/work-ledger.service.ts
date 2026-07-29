@@ -750,7 +750,8 @@ export async function getMyWork(args: {
   const DONE = new Set(["EXECUTED", "VERIFIED", "CANCELLED", "EXPIRED"]);
   rows.forEach((row, i) => {
     if (row.owner_entity_id === args.caller_entity_id && !DONE.has(row.status)) {
-      // Slice 6 — server gate: vague / PROPOSED cannot be marked complete.
+      // Slice 6 — server gate: vague titles and EXECUTING cannot complete.
+      // Specific PROPOSED tasks (tracked messages) remain completable.
       if (
         !cannotCompleteSafely({ title: row.title, status: row.status })
       ) {

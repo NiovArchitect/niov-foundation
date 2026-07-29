@@ -1,36 +1,53 @@
 {
   "title": "OTZAR — WHOLE-SYSTEM RECOVERY INTEGRATED CLOSURE (Slice 6)",
   "date": "2026-07-29",
-  "status": "IN_PROGRESS_NOT_YC_READY",
-  "foundation_branch": "otzar/slice-6-work-contract-quarantine-clarify",
-  "pr": "https://github.com/NiovArchitect/niov-foundation/pull/755",
+  "status": "MERGED_AWAITING_DEPLOY_AND_FOUNDER_REVIEW",
+  "foundation_source_main": "c1073474dddbc08d4ce673158054bcca41798f83",
+  "foundation_live_api": "edd0a6ba2efa54287890b4e9de0399c4efd364af",
+  "control_tower_source": "6b2862c8e18fb4cf76eadd7a1d6be78b86a5d7de",
+  "control_tower_live_bundle": "assets/index-BcLEWVoJ.js",
+  "deployment_parity": "NO — API still on pre-Slice-6 SHA; RENDER_API_KEY unauthorized (external blocker)",
+  "pr_merged": "https://github.com/NiovArchitect/niov-foundation/pull/755",
+  "ci": "all green on 136fb97 / squash merge c107347",
   "preserve_slices_1_to_5": true,
-  "closed_this_campaign": {
-    "server_work_contract": "enforceWorkContract + serverHumanWorkTitle at createLedgerEntry; vague demoted to PROPOSED",
-    "server_complete_gate": "getMyWork can_complete false only for vague titles and EXECUTING (specific PROPOSED completable)",
-    "approval_quarantine": "listActionsForCaller filters non-reviewable PROPOSED; gates recipient + requester + escalation + action_type",
-    "auto_clarify": "autoClarifyRoutineAmbiguity only when isVagueWorkTitle; skips DOCUMENT_CONTEXT/ORG_SEEDING/GOAL; market pattern requires signal on raw phrase",
-    "demo_narrative": "HelioGrid fictional seed doctrine + 5 transcripts + local heliogrid-demo-reset-seed.ts",
-    "founder_walkthrough_script": "docs/product/OTZAR_FOUNDER_TWO_MINUTE_WALKTHROUGH.md"
+  "demo_reset": {
+    "run_1": "PASS (local .env.demo.local)",
+    "run_2": "PASS",
+    "duplicate_active_after_run_2": 0,
+    "personas": 9,
+    "work_created_per_run": 6,
+    "auto_clarify_seed_case": "Circle back with Casey → Casey: confirm remaining security controls before interview invite for HelioGrid application review (fictional)"
   },
-  "python_role": "EXPLICIT: advisory async enrichment only; primary extraction TypeScript; UI never shows Python status or errors",
-  "required_python_runtime": "NOT required for work contract / quarantine / auto-clarify path; keep as evaluation gate",
-  "primary_python_error_copy": 0,
-  "still_open_external_or_large": [
-    "Full multi-persona live seed on production tenant (needs founder-gated provision)",
-    "Real Google OAuth consent + production identity",
-    "Calendar/Gmail/Drive runtime proof with founder credentials",
-    "Full portable export/import",
-    "Scheduled report runner",
-    "Full screen census + a11y matrix automation on Control Tower",
-    "Founder experience verdict"
-  ],
-  "prohibited_claims_until_proof": [
-    "YC release ready",
-    "Google Workspace fully connected without live OAuth",
-    "All personas live on production without seed proof",
-    "Scheduled reports generating without runner"
-  ],
+  "closed_backend_obligations": {
+    "server_work_contract": "PASS — enforceWorkContract at createLedgerEntry",
+    "server_title_at_create": "PASS — serverHumanWorkTitle",
+    "approval_quarantine": "PASS — listActionsForCaller filters non-reviewable PROPOSED",
+    "auto_clarify_routine": "PASS — vague titles only; security/market/named patterns",
+    "python_role": "EXPLICIT advisory async only; not required for contract path",
+    "demo_doctrine_and_transcripts": "PASS — 5 HelioGrid transcripts + local seed script"
+  },
+  "still_open": {
+    "external_blockers": [
+      "RENDER_API_KEY invalid/revoked — cannot deploy otzar-api to c107347",
+      "Real Google OAuth consent + production identity credentials",
+      "Founder experience verdict"
+    ],
+    "post_demo_nonblocking": [
+      "Full portable export/import",
+      "Scheduled report runner",
+      "Full automated screen census + a11y matrix",
+      "Production multi-persona seed (gated provision scripts)",
+      "Conversation project/person linkage depth",
+      "Full retention enforcement truth",
+      "External relationship access proof"
+    ],
+    "prohibited_claims": [
+      "YC release ready",
+      "Deployment parity YES",
+      "Google Workspace fully proven live",
+      "Production demo fully reseeded"
+    ]
+  },
   "caretaker_relay_touched": "NO",
   "background_workers": 0,
   "founder_experience": "AWAITING FOUNDER REVIEW",
