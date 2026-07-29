@@ -33,6 +33,20 @@ export interface WorkingPolicy {
   lunch_end_min: number;
   /** ISO weekday numbers that are working days (1=Mon … 7=Sun). */
   working_days: ReadonlyArray<number>;
+  /**
+   * Quiet hours (first-class). Minutes from local midnight.
+   * Window may wrap midnight (e.g. 19:00–07:00 when quiet_start > quiet_end).
+   */
+  quiet_start_min: number;
+  quiet_end_min: number;
+  /** ISO weekdays quiet hours apply (default every day). */
+  quiet_days: ReadonlyArray<number>;
+  /** Silent AI work allowed during quiet hours under policy. */
+  quiet_permitted_silent_ai: boolean;
+  /** Human notification exceptions during quiet hours (codes). */
+  quiet_notification_exceptions: ReadonlyArray<string>;
+  /** Escalation threshold before interrupting a human in quiet hours. */
+  quiet_escalation_threshold: "NONE" | "HIGH" | "CRITICAL";
 }
 
 export const DEFAULT_WORKING_POLICY: WorkingPolicy = {
@@ -41,7 +55,68 @@ export const DEFAULT_WORKING_POLICY: WorkingPolicy = {
   lunch_start_min: 12 * 60,
   lunch_end_min: 13 * 60,
   working_days: [1, 2, 3, 4, 5],
+  // Quiet hours 7:00 PM – 7:00 AM local (wraps midnight).
+  quiet_start_min: 19 * 60,
+  quiet_end_min: 7 * 60,
+  quiet_days: [1, 2, 3, 4, 5, 6, 7],
+  quiet_permitted_silent_ai: true,
+  quiet_notification_exceptions: ["BREAK_GLASS", "CRITICAL_ESCALATION"],
+  quiet_escalation_threshold: "HIGH",
 };
+
+/**
+ * WHAT: True when local clock is inside quiet hours for the policy.
+ * INPUT: minutes from local midnight + iso weekday + policy.
+ * OUTPUT: boolean (wraps midnight when quiet_start > quiet_end).
+ */
+export function isQuietHoursAt(
+  minutes: number,
+  isoWeekday: number,
+  policy: WorkingPolicy = DEFAULT_WORKING_POLICY,
+): boolean {
+  if (!policy.quiet_days.includes(isoWeekday)) return false;
+  const start = policy.quiet_start_min;
+  const end = policy.quiet_end_min;
+  if (start === end) return false;
+  if (start < end) {
+    return minutes >= start && minutes < end;
+  }
+  // Wraps midnight: e.g. 19:00–07:00
+  return minutes >= start || minutes < end;
+}
+
+/**
+ * WHAT: Whether nonessential human notifications should be suppressed.
+ * INPUT: quiet-hours boolean + exception code if any.
+ * OUTPUT: suppress=true when quiet and exception not allowed.
+ */
+export function shouldSuppressHumanNotification(
+  inQuietHours: boolean,
+  exceptionCode: string | null | undefined,
+  policy: WorkingPolicy = DEFAULT_WORKING_POLICY,
+): boolean {
+  if (!inQuietHours) return false;
+  if (
+    exceptionCode &&
+    policy.quiet_notification_exceptions.includes(exceptionCode)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * WHAT: Whether silent AI-to-AI / draft work is permitted now.
+ * INPUT: quiet-hours flag + policy.
+ * OUTPUT: true when not quiet, or quiet with silent AI allowed.
+ */
+export function mayPerformSilentAiWork(
+  inQuietHours: boolean,
+  policy: WorkingPolicy = DEFAULT_WORKING_POLICY,
+): boolean {
+  if (!inQuietHours) return true;
+  return policy.quiet_permitted_silent_ai === true;
+}
 
 export interface SchedulingAttendee {
   name: string;

@@ -263,5 +263,8 @@ describe("[ORG-SUBSTRATE] work profiles + scheduling policy (DB + HTTP + pure)",
     // Policy defaults are the documented Redwood defaults.
     expect(DEFAULT_WORKING_POLICY.lunch_start_min).toBe(720);
     expect(DEFAULT_WORKING_POLICY.work_end_min).toBe(1050);
+    expect(DEFAULT_WORKING_POLICY.quiet_start_min).toBe(19 * 60);
+    expect(DEFAULT_WORKING_POLICY.quiet_end_min).toBe(7 * 60);
+    expect(DEFAULT_WORKING_POLICY.quiet_permitted_silent_ai).toBe(true);
   });
 });
