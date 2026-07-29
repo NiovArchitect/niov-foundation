@@ -15,6 +15,7 @@ import { CRYPTO_CONFIG, verifyPassword } from "@niov/auth";
 import {
   createSession,
   getEntityByEmail,
+  getEntityById,
   getSessionById,
   getTARByEntityId,
   incrementFailedAuth,
@@ -373,6 +374,99 @@ export class AuthService {
     });
 
     // STEP 7 -- return the token
+    return {
+      ok: true,
+      token,
+      session_id,
+      entity_id: entity.entity_id,
+      expires_at: expiresAt,
+      allowed_operations: allowed,
+      clearance_ceiling: tar.clearance_ceiling,
+    };
+  }
+
+  /**
+   * WHAT: Issue a short-lived session for an already-verified entity without
+   *       a password (demo persona launcher only). Caller MUST enforce allowlist.
+   * INPUT: entity_id, ops, optional TTL minutes (default 120), audit context.
+   * OUTPUT: LoginResult or LoginFailure.
+   * WHY: YC demo launcher must never put passwords in frontend source.
+   */
+  async issueInternalSession(
+    entityId: string,
+    requestedOperations: string[],
+    context: {
+      ip_address?: string | null;
+      user_agent?: string | null;
+      reason: string;
+      ttl_minutes?: number;
+    },
+  ): Promise<LoginResult | LoginFailure> {
+    const entity = await getEntityById(entityId);
+    if (entity === null || entity.status !== "ACTIVE") {
+      return invalidCredentials();
+    }
+    const tar = await getTARByEntityId(entity.entity_id);
+    if (tar === null || tar.status !== "ACTIVE") {
+      return invalidCredentials();
+    }
+    const { allowed, canLogin } = narrowOperations(tar, requestedOperations);
+    if (!canLogin) {
+      return invalidCredentials();
+    }
+    const ttlMinutes = Math.min(
+      Math.max(context.ttl_minutes ?? 120, 5),
+      480,
+    );
+    const sessionTtlMs = ttlMinutes * 60 * 1000;
+    const sessionTtlSeconds = Math.floor(sessionTtlMs / 1000);
+    const session_id = randomUUID();
+    const issuedAt = new Date();
+    const expiresAt = new Date(issuedAt.getTime() + sessionTtlMs);
+    const orgSettings = await getOrgSettingsOrDefaults(entity.entity_id);
+
+    await createSession({
+      session_id,
+      entity_id: entity.entity_id,
+      tar_hash_at_creation: tar.tar_hash,
+      allowed_operations: allowed,
+      clearance_ceiling: tar.clearance_ceiling,
+      issued_at: issuedAt,
+      expires_at: expiresAt,
+      idle_timeout_minutes: orgSettings.idle_timeout_minutes,
+      device_binding_hash: this.deviceBindingHash(context.user_agent),
+    });
+
+    const payload: SessionTokenPayload = {
+      session_id,
+      entity_id: entity.entity_id,
+      allowed_operations: allowed,
+      clearance_ceiling: tar.clearance_ceiling,
+      tar_hash: tar.tar_hash,
+      expires_at: expiresAt.getTime(),
+      issued_at: issuedAt.getTime(),
+    };
+    const signOptions: SignOptions = {
+      expiresIn: sessionTtlSeconds,
+      algorithm: CRYPTO_CONFIG.JWT_ALGORITHM,
+    };
+    const token = jwt.sign(payload, this.config.jwtSecret, signOptions);
+    await this.config.nonceStore.set(session_id, sessionTtlSeconds);
+
+    await writeAuditEvent({
+      event_type: "LOGIN_SUCCESS",
+      outcome: "SUCCESS",
+      actor_entity_id: entity.entity_id,
+      session_id,
+      ip_address: context.ip_address ?? null,
+      details: {
+        allowed_operations: allowed,
+        clearance_ceiling: tar.clearance_ceiling,
+        demo_persona_launch: true,
+        reason: context.reason,
+      },
+    });
+
     return {
       ok: true,
       token,
