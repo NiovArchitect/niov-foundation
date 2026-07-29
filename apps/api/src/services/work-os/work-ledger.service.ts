@@ -391,23 +391,28 @@ export async function enrichLedgerEntryAsync(args: {
       },
     });
 
+    // Founder recovery: Python is advisory. Honesty lives on
+    // details.python_enrichment. Only successful enrichment is recorded as
+    // an execution attempt — soft misses must not flood FAILED digests /
+    // verification storm surfaces.
     const enriched = envelope.status === "PYTHON_ENRICHED";
-    await recordExecutionAttempt({
-      ledger_entry_id: args.ledger_entry_id,
-      org_entity_id: args.org_entity_id,
-      attempt_type: "PYTHON_ENRICHMENT",
-      runtime: "PYTHON",
-      evidence_type: "PROVIDER_RESPONSE",
-      status: enriched ? "VERIFIED" : "FAILED",
-      detail: {
-        enrichment_status: envelope.status,
-        authority: envelope.authority,
-        capability: envelope.capability,
-        signal_count: envelope.candidates.length,
-        latency_ms: envelope.latency_ms,
-      },
-      ...(enriched ? {} : { error_code: envelope.status }),
-    });
+    if (enriched) {
+      await recordExecutionAttempt({
+        ledger_entry_id: args.ledger_entry_id,
+        org_entity_id: args.org_entity_id,
+        attempt_type: "PYTHON_ENRICHMENT",
+        runtime: "PYTHON",
+        evidence_type: "PROVIDER_RESPONSE",
+        status: "VERIFIED",
+        detail: {
+          enrichment_status: envelope.status,
+          authority: envelope.authority,
+          capability: envelope.capability,
+          signal_count: envelope.candidates.length,
+          latency_ms: envelope.latency_ms,
+        },
+      });
+    }
   } catch (err) {
     // Best-effort: never let async enrichment break anything. Log the FACT of
     // failure (no raw enrichment text / no payload) and mark the row ERROR.
@@ -874,18 +879,36 @@ export async function getBlindSpots(args: {
   });
   const statusBased = rows.map(projectLedger);
 
-  // PART C — also surface rows whose runtime proof FAILED, even if their
-  // ledger status looks fine. "Not attempted" is never a failure; only an
-  // actual FAILED execution attempt counts. Tenant-scoped via the digest.
+  // PART C — surface rows whose *human-relevant* runtime proof FAILED.
+  // Founder recovery: BEAM fanout / Python enrichment soft-fails are internal
+  // infrastructure noise — never employee verification labor. Only core
+  // write/connector execution failures add or tag blind spots. Completed work
+  // never re-enters this surface.
   const digests = await getFailedAttemptDigests(args.org_entity_id);
   const byId = new Map(statusBased.map((e) => [e.ledger_entry_id, e]));
-  const missingIds = [...digests.keys()].filter((id) => !byId.has(id));
+  const humanFailIds = [...digests.entries()]
+    .filter(([, d]) => humanProofFailure(d.failed_attempt_types) !== null)
+    .map(([id]) => id);
+  const missingIds = humanFailIds.filter((id) => !byId.has(id));
   if (missingIds.length > 0) {
     const failedRows = await prisma.workLedgerEntry.findMany({
       where: {
         ...scope,
         ledger_entry_id: { in: missingIds },
-        NOT: { status: { in: ["CANCELLED", "EXPIRED"] } },
+        NOT: {
+          status: {
+            in: [
+              "CANCELLED",
+              "EXPIRED",
+              "VERIFIED",
+              "EXECUTED",
+              "COMPLETED",
+              "SUCCEEDED",
+              "DONE",
+              "CLOSED",
+            ],
+          },
+        },
       },
       orderBy: { created_at: "desc" },
       take: 200,
@@ -896,15 +919,16 @@ export async function getBlindSpots(args: {
       statusBased.push(v);
     }
   }
-  // Tag every row that has a failed-attempt digest with the proof-failure
-  // reason + severity (rows already present for a status reason get tagged
-  // too, so the UI can route them to the runtime-issues section).
+  // Tag only human-relevant proof failures (rows already present for a status
+  // reason get tagged so the UI can route them to runtime issues). Soft
+  // infrastructure digests are left untagged and never PART-C-added.
   for (const [id, digest] of digests) {
     const v = byId.get(id);
     if (v === undefined) continue;
-    const { reason, severity } = classifyProofFailure(digest.failed_attempt_types);
-    v.blind_spot_reason = reason;
-    v.blind_spot_severity = severity;
+    const human = humanProofFailure(digest.failed_attempt_types);
+    if (human === null) continue;
+    v.blind_spot_reason = human.reason;
+    v.blind_spot_severity = human.severity;
   }
   return statusBased;
 }
@@ -916,22 +940,23 @@ export async function getBlindSpots(args: {
 export { getBlindSpotFeed } from "./watcher.service.js";
 export type { BlindSpotFeedItem, BlindSpotType } from "./watcher.service.js";
 
-// WHAT: pick the dominant blind-spot reason + severity from failed attempt
-//        types. EXECUTION_FAILED (core write) > COORDINATION_FAILED (BEAM,
-//        internal-only) > ENRICHMENT_FAILED (deterministic fallback worked).
-function classifyProofFailure(
+// WHAT: human-facing proof failure only — core write / connector execution.
+//        BEAM_FANOUT and PYTHON_ENRICHMENT are infrastructure soft-paths and
+//        must not create blind spots or "verification storm" labels.
+// INPUT: failedTypes — attempt_type strings from FAILED digests
+// OUTPUT: reason+severity, or null when the failure is not employee labor
+// WHY: founder recovery — optional coordination/enrichment misses are not
+//      "Needs your decision" work for operators or employees.
+function humanProofFailure(
   failedTypes: string[],
-): { reason: string; severity: string } {
-  if (failedTypes.includes("WORK_LEDGER_CREATE") || failedTypes.includes("CONNECTOR_EXECUTION")) {
+): { reason: string; severity: string } | null {
+  if (
+    failedTypes.includes("WORK_LEDGER_CREATE") ||
+    failedTypes.includes("CONNECTOR_EXECUTION")
+  ) {
     return { reason: "EXECUTION_FAILED", severity: "HIGH" };
   }
-  if (failedTypes.includes("BEAM_FANOUT")) {
-    return { reason: "COORDINATION_FAILED", severity: "MEDIUM" };
-  }
-  if (failedTypes.includes("PYTHON_ENRICHMENT")) {
-    return { reason: "ENRICHMENT_FAILED", severity: "LOW" };
-  }
-  return { reason: "VERIFICATION_MISSING", severity: "MEDIUM" };
+  return null;
 }
 
 export interface WorkLedgerView {
