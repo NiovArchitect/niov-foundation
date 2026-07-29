@@ -1,0 +1,28 @@
+{
+  "title": "OTZAR — WHOLE-SYSTEM RECOVERY SLICE 5",
+  "date": "2026-07-29",
+  "status": "SHIPPING",
+  "admin_root_causes": [
+    "Command Center led with Mode demo and N/M setup steps",
+    "Vanity metrics (compound score, vocab growth) as primary story",
+    "Scheduled reports marked Setup needed without useful alternatives",
+    "Hierarchy badge said Needs hierarchy setup without action path",
+    "Governance overview lacked business-question framing"
+  ],
+  "shipped": {
+    "admin_home": "status / what is working / ≤3 priorities / outcome KPIs with source lineage",
+    "no_demo_mode_badge": true,
+    "no_setup_fraction": true,
+    "governance_business_model": true,
+    "reports_types": ["executive", "compliance", "activity", "team", "judgment", "ai_teammates"],
+    "scheduled_reports": "Manual now — honest zero automatic deliveries",
+    "role_templates_catalog": 6,
+    "relationship_types": 6
+  },
+  "demo_setup_complete": "PARTIAL — runtime readiness derived from live org data; full YC persona seed remains open",
+  "caretaker_relay_touched": "NO",
+  "background_workers": 0,
+  "whole_system_recovery": "IN PROGRESS",
+  "next_automatic_slice": "DEMO RECONCILIATION, MULTI-PERSONA JOURNEYS, WALKTHROUGH, SCREEN CENSUS, SECURITY, AND FINAL PROOF",
+  "founder_experience": "AWAITING FINAL WHOLE-SYSTEM REVIEW"
+}
