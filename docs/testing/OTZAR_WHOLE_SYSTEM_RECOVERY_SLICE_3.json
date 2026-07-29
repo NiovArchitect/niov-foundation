@@ -1,0 +1,65 @@
+{
+  "title": "OTZAR — WHOLE-SYSTEM RECOVERY SLICE 3",
+  "date": "2026-07-29",
+  "status": "SHIPPING",
+  "foundation_source_deploy": "pending",
+  "control_tower_source_deploy": "pending",
+  "app_bundle": "pending",
+  "deployment_parity": "pending",
+  "connections_root_causes": [
+    "Employee Connections was capability-category maze, not tool cards",
+    "OAuth callback left users on a dead HTML page (close this tab)",
+    "Work setup CTAs sent employees to admin /tools-connections",
+    "Primary copy still mentioned MCP on employee surfaces",
+    "No return-to-work context after Connect Google Workspace",
+    "No connected identity / Otzar may capability language on primary cards"
+  ],
+  "primary_tool_cards": [
+    "Google Workspace",
+    "Microsoft 365",
+    "Slack",
+    "GitHub"
+  ],
+  "shipped": {
+    "employee_heading": "Connect your work tools",
+    "oauth_callback_return": "CONTROL_TOWER_URL/app/connector-health?oauth=…&tool=…",
+    "account_label_on_catalog": true,
+    "return_context": "sessionStorage + deep-link why/return",
+    "work_ledger_setup_link": "/app/connector-health with tool+return+why",
+    "admin_separation": "Organization connections secondary; Advanced connections tab last",
+    "developer_terms_primary": 0
+  },
+  "hard_gates": {
+    "connections_three_second_clarity": "PASS (unit)",
+    "normal_user_developer_terminology": 0,
+    "google_workspace_primary_cta": "PASS (unit)",
+    "google_oauth_initiation": "PASS (unit assigns authorize_url)",
+    "google_oauth_callback": "PASS (HTML meta-refresh to CT; live consent needs org Google app credentials)",
+    "return_to_original_context": "PASS (unit)",
+    "connected_identity": "PASS when account_label present",
+    "capability_language": "HUMAN AND RUNTIME-TRUE (View/Understand/Draft/Create/Execute labels; Gmail send scoped honestly)",
+    "employee_admin_separation": "PASS",
+    "raw_scopes_primary_ui": 0,
+    "advanced_setup_primary_noise": 0,
+    "oauth_secrets_in_frontend": 0,
+    "caretaker_relay_touched": "NO",
+    "background_workers": 0
+  },
+  "slice_2_backend_obligations": [
+    "S2-1 server-side minimum work contract",
+    "S2-2 autonomous AI-Teammate clarification",
+    "S2-3 source-context enrichment",
+    "S2-4 demo data quarantine and reseed",
+    "S2-5 required Python enrichment configuration",
+    "S2-6 malformed approval quarantine store",
+    "S2-7 My Work 20/20 live reliability",
+    "S2-8 multi-persona Talk and Work consistency",
+    "S2-9 server-side title generation at creation time"
+  ],
+  "slice_2_backend_ledger": "docs/product/OTZAR_SLICE_2_BACKEND_CARRY_FORWARD_LEDGER.md",
+  "unit_tests_ct": "19 pass (connector-health + primary-work-tools + capability-first + tools-connections)",
+  "unit_tests_foundation": "19 pass (connector-oauth + enterprise-tools-catalog)",
+  "whole_system_recovery": "IN PROGRESS",
+  "next_automatic_slice": "MEMORY, CONVERSATION HISTORY, AND PORTABILITY",
+  "founder_experience": "AWAITING FINAL WHOLE-SYSTEM REVIEW"
+}
