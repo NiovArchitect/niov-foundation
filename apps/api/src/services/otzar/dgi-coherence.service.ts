@@ -72,6 +72,7 @@ export type DgiCoherenceSignal =
   | "AUTHORITY_MISSING"
   | "CORRECTIONS_ACTIVE"
   | "OBLIGATIONS_OPEN"
+  | "ACTIVE_WORK_OPEN"
   | "PAIRING_OK"
   | "PAIRING_BLOCKED"
   | "PAIRING_UNPAIRED";
@@ -92,6 +93,7 @@ export type DgiNextBestStepKind =
   | "REVIEW_ORG_TRUTH"
   | "ACKNOWLEDGE_HANDOFF"
   | "ADVANCE_OBLIGATION"
+  | "ADVANCE_ACTIVE_WORK"
   | "GRANT_AUTHORITY"
   | "IDLE_HEALTHY";
 
@@ -167,6 +169,13 @@ export interface DgiCoherenceSnapshot {
   open_obligation_titles: string[];
   /** First N open obligation ids for deep-link focus (order matches titles). */
   open_obligation_ids: string[];
+  /**
+   * Active My Work ledger rows owned by the caller (same projection as
+   * GET /work-os/my-work). Talk must use these when answering "what is my work?"
+   * so Talk and My Work never contradict.
+   */
+  open_active_work_count: number;
+  open_active_work_titles: string[];
   open_org_truth_conflicts_count: number;
   open_org_truth_conflict_ids: string[];
   active_personal_corrections_count: number;
@@ -180,9 +189,8 @@ export interface DgiCoherenceSnapshot {
   eligible_twin_count: number;
   coherence_status: DgiCoherenceStatus;
   /**
-   * Count of material attention items (obligations + conflicts + incoming
-   * handoffs). Corrections are preference memory — counted separately, not
-   * as "needs you now" pressure unless the product elevates them.
+   * Count of material attention items (obligations + active work + conflicts +
+   * incoming handoffs). Corrections are preference memory — counted separately.
    */
   attention_count: number;
   /** Explainable state chips (deterministic). */
@@ -239,11 +247,13 @@ export function twinPairingFromSelection(
 export function deriveCoherenceStatus(args: {
   twin_pairing_status: TwinPairingStatus;
   open_obligations_count: number;
+  open_active_work_count?: number;
   open_org_truth_conflicts_count: number;
   open_incoming_handoffs_count: number;
 }): { coherence_status: DgiCoherenceStatus; attention_count: number } {
   const attention_count =
     args.open_obligations_count +
+    (args.open_active_work_count ?? 0) +
     args.open_org_truth_conflicts_count +
     args.open_incoming_handoffs_count;
 
@@ -263,6 +273,7 @@ export function deriveCoherenceStatus(args: {
 export function deriveCoherenceSignals(args: {
   twin_pairing_status: TwinPairingStatus;
   open_obligations_count: number;
+  open_active_work_count?: number;
   open_org_truth_conflicts_count: number;
   open_incoming_handoffs_count: number;
   active_personal_corrections_count: number;
@@ -275,10 +286,14 @@ export function deriveCoherenceSignals(args: {
   if (args.open_org_truth_conflicts_count > 0) signals.push("CONFLICTED");
   if (args.open_incoming_handoffs_count > 0) signals.push("HANDOFF_INCOMPLETE");
   if (args.open_obligations_count > 0) signals.push("OBLIGATIONS_OPEN");
+  if ((args.open_active_work_count ?? 0) > 0) signals.push("ACTIVE_WORK_OPEN");
   if (args.active_personal_corrections_count > 0) signals.push("CORRECTIONS_ACTIVE");
   if (args.active_twin_authority_grants_count > 0) {
     signals.push("AUTHORITY_PRESENT");
-  } else if (args.twin_pairing_status === "OK" && args.open_obligations_count > 0) {
+  } else if (
+    args.twin_pairing_status === "OK" &&
+    (args.open_obligations_count > 0 || (args.open_active_work_count ?? 0) > 0)
+  ) {
     signals.push("AUTHORITY_MISSING");
   }
   return signals;
@@ -287,7 +302,7 @@ export function deriveCoherenceSignals(args: {
 /**
  * Pure: highest-priority next-best-step from Foundation state.
  * Priority order (fail-closed first): pairing → truth conflict → handoff →
- * obligation → authority gap → idle.
+ * obligation → active My Work ledger → authority gap → idle.
  * Never grants authority; only recommends a product route + autonomy ceiling.
  */
 export function deriveNextBestStep(args: {
@@ -296,6 +311,8 @@ export function deriveNextBestStep(args: {
   open_obligations_count: number;
   open_obligation_titles: string[];
   open_obligation_ids?: string[];
+  open_active_work_count?: number;
+  open_active_work_titles?: string[];
   open_org_truth_conflicts_count: number;
   open_org_truth_conflict_ids?: string[];
   open_incoming_handoffs_count: number;
@@ -382,6 +399,25 @@ export function deriveNextBestStep(args: {
       focus: oid ? { obligation_id: oid } : undefined,
     };
   }
+  // Same projection as My Work — before "grant authority" so Talk never
+  // says "no tasks" when the ledger has active owned work.
+  const workCount = args.open_active_work_count ?? 0;
+  if (workCount > 0) {
+    const sample = (args.open_active_work_titles ?? [])[0];
+    return {
+      kind: "ADVANCE_ACTIVE_WORK",
+      priority: 4,
+      safe_title:
+        workCount === 1
+          ? "Continue your assigned work"
+          : `Continue ${workCount} assigned work items`,
+      reason: sample
+        ? `Your active work includes: "${sample}".`
+        : "You have active work on My Work that needs progress.",
+      route_hint: "/app/my-work",
+      autonomy_ceiling: "EXECUTE_WITH_CONFIRMATION",
+    };
+  }
   if (args.active_twin_authority_grants_count === 0) {
     return {
       kind: "GRANT_AUTHORITY",
@@ -409,12 +445,14 @@ function finalizeSnapshot(
   const derived = deriveCoherenceStatus({
     twin_pairing_status: base.twin_pairing_status,
     open_obligations_count: base.open_obligations_count,
+    open_active_work_count: base.open_active_work_count,
     open_org_truth_conflicts_count: base.open_org_truth_conflicts_count,
     open_incoming_handoffs_count: base.open_incoming_handoffs_count,
   });
   const signals = deriveCoherenceSignals({
     twin_pairing_status: base.twin_pairing_status,
     open_obligations_count: base.open_obligations_count,
+    open_active_work_count: base.open_active_work_count,
     open_org_truth_conflicts_count: base.open_org_truth_conflicts_count,
     open_incoming_handoffs_count: base.open_incoming_handoffs_count,
     active_personal_corrections_count: base.active_personal_corrections_count,
@@ -426,6 +464,8 @@ function finalizeSnapshot(
     open_obligations_count: base.open_obligations_count,
     open_obligation_titles: base.open_obligation_titles,
     open_obligation_ids: base.open_obligation_ids,
+    open_active_work_count: base.open_active_work_count,
+    open_active_work_titles: base.open_active_work_titles,
     open_org_truth_conflicts_count: base.open_org_truth_conflicts_count,
     open_org_truth_conflict_ids: base.open_org_truth_conflict_ids,
     open_incoming_handoffs_count: base.open_incoming_handoffs_count,
@@ -452,6 +492,8 @@ function emptySnapshot(
     open_obligations_count: 0,
     open_obligation_titles: [],
     open_obligation_ids: [],
+    open_active_work_count: 0,
+    open_active_work_titles: [],
     open_org_truth_conflicts_count: 0,
     open_org_truth_conflict_ids: [],
     active_personal_corrections_count: 0,
@@ -502,7 +544,7 @@ export async function buildDgiCoherenceSnapshot(args: {
       "CLARIFICATION_REQUIRED",
     ] as HandoffState[];
 
-    const [obligations, conflicts, corrections, grants, handoffs] =
+    const [obligations, conflicts, corrections, grants, handoffs, activeWork] =
       await Promise.all([
         org === null || twinId === null
           ? Promise.resolve([] as SafeObligation[])
@@ -557,6 +599,37 @@ export async function buildDgiCoherenceSnapshot(args: {
                 limit: 20,
               },
             ).catch(() => [] as SafeHandoff[]),
+        // Same ownership scope as getMyWork — titles only for Talk coherence.
+        org === null
+          ? Promise.resolve([] as Array<{ title: string }>)
+          : prisma.workLedgerEntry
+              .findMany({
+                where: {
+                  org_entity_id: org,
+                  OR: [
+                    { owner_entity_id: args.subjectEntityId },
+                    { target_entity_id: args.subjectEntityId },
+                    { requester_entity_id: args.subjectEntityId },
+                  ],
+                  ledger_type: {
+                    notIn: [
+                      "ORG_SEEDING",
+                      "GOAL",
+                      "DOCUMENT_CONTEXT",
+                      "DOCUMENT",
+                    ],
+                  },
+                  NOT: {
+                    status: {
+                      in: ["CANCELLED", "EXPIRED", "EXECUTED", "VERIFIED"],
+                    },
+                  },
+                },
+                orderBy: [{ created_at: "desc" }, { ledger_entry_id: "desc" }],
+                take: 20,
+                select: { title: true },
+              })
+              .catch(() => [] as Array<{ title: string }>),
       ]);
 
     const open_obligation_titles = obligations
@@ -565,6 +638,9 @@ export async function buildDgiCoherenceSnapshot(args: {
     const open_obligation_ids = obligations
       .slice(0, TITLE_CAP)
       .map((o) => o.obligation_id);
+    const open_active_work_titles = activeWork
+      .slice(0, TITLE_CAP)
+      .map((w) => safeTitle(w.title));
     const open_incoming_handoff_titles = handoffs
       .slice(0, TITLE_CAP)
       .map((h) => safeTitle(h.title));
@@ -579,6 +655,8 @@ export async function buildDgiCoherenceSnapshot(args: {
       open_obligations_count: obligations.length,
       open_obligation_titles,
       open_obligation_ids,
+      open_active_work_count: activeWork.length,
+      open_active_work_titles,
       open_org_truth_conflicts_count: conflicts.length,
       open_org_truth_conflict_ids,
       active_personal_corrections_count: corrections,
@@ -621,11 +699,30 @@ export function renderDgiSystemBlock(s: DgiCoherenceSnapshot): string {
     );
     if (s.open_obligation_titles.length > 0) {
       lines.push(
-        `Recent open work: ${s.open_obligation_titles.map((t) => `"${t}"`).join("; ")}.`,
+        `Recent open obligations: ${s.open_obligation_titles.map((t) => `"${t}"`).join("; ")}.`,
       );
     }
   } else {
     lines.push("Open obligations for this relationship: none recorded.");
+  }
+
+  // MUST match My Work. When answering "what task am I assigned?" use these titles.
+  if (s.open_active_work_count > 0) {
+    lines.push(
+      `Active assigned work on My Work (authoritative for "what is my work / what task am I assigned"): ${s.open_active_work_count}.`,
+    );
+    if (s.open_active_work_titles.length > 0) {
+      lines.push(
+        `Assigned work titles: ${s.open_active_work_titles.map((t) => `"${t}"`).join("; ")}.`,
+      );
+    }
+    lines.push(
+      "When the human asks what task they are assigned, what their work is, or what to do next, lead with these assigned work titles. Do not claim they have no tasks if this list is non-empty.",
+    );
+  } else {
+    lines.push(
+      "Active assigned work on My Work: none. Only then may you say they have no assigned tasks.",
+    );
   }
 
   if (s.open_incoming_handoffs_count > 0) {
