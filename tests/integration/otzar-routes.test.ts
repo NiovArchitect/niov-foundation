@@ -679,6 +679,8 @@ describe("GET /otzar/conversations", () => {
     const body = response.json() as {
       items: Record<string, unknown>[];
     };
+    // Slice 4: title / summary_preview / summary_available are safe list
+    // projections (never raw transcript / payload_summary / participants).
     expect(Object.keys(body.items[0]!).sort()).toEqual([
       "closed_at",
       "conversation_id",
@@ -686,6 +688,9 @@ describe("GET /otzar/conversations", () => {
       "source_type",
       "started_at",
       "status",
+      "summary_available",
+      "summary_preview",
+      "title",
       "twin_id",
     ]);
   });

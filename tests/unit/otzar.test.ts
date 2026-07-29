@@ -1653,6 +1653,8 @@ describe("listConversations", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const item = result.items[0]!;
+    // Slice 4 adds title / summary_preview / summary_available (safe
+    // projections — never full transcripts or capsule internals).
     expect(Object.keys(item).sort()).toEqual([
       "closed_at",
       "conversation_id",
@@ -1660,6 +1662,9 @@ describe("listConversations", () => {
       "source_type",
       "started_at",
       "status",
+      "summary_available",
+      "summary_preview",
+      "title",
       "twin_id",
     ]);
     const serialized = JSON.stringify(result);
