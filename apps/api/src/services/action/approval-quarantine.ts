@@ -70,6 +70,30 @@ export function classifyApprovalForNeedsMe(
       reason: "Recipient unavailable — cannot approve without a person",
     };
   }
+  // Missing requester is incomplete context for a consequential approval.
+  const requester =
+    typeof a.requester_label === "string" && a.requester_label.trim().length > 0
+      ? a.requester_label.trim()
+      : null;
+  if (requester === null) {
+    return {
+      class: "repairable",
+      active_reviewable: false,
+      reason: "Requester unavailable — incomplete approval context",
+    };
+  }
+  // action_type is the human-facing preview of what would execute.
+  if (
+    typeof a.action_type !== "string" ||
+    a.action_type.trim().length === 0 ||
+    a.action_type === "UNKNOWN"
+  ) {
+    return {
+      class: "invalid",
+      active_reviewable: false,
+      reason: "Missing action preview — cannot approve blindly",
+    };
+  }
   return {
     class: "ok",
     active_reviewable: true,

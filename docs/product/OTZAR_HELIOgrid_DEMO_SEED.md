@@ -22,19 +22,26 @@
 
 ## Transcript set (5)
 
-1. Initial application review — product, founders, questions, owners  
-2. Technical + security diligence — checklist, deadline, risk  
-3. Market + customer evidence — urgency, correction  
-4. Cross-team convergence — recommendation, conditions, one human decision  
-5. Post-decision operations — scheduling, report, remaining work  
+Canonical files under `docs/product/demo-transcripts/`:
+
+1. `heliogrid-t1-initial-review.md` — product, founders, questions, owners  
+2. `heliogrid-t2-tech-security.md` — checklist, deadline, risk  
+3. `heliogrid-t3-market-customer.md` — urgency, correction  
+4. `heliogrid-t4-convergence.md` — recommendation, conditions, one human decision  
+5. `heliogrid-t5-post-decision-ops.md` — scheduling, report, remaining work  
 
 ## Server contract
 
 Active work must pass `enforceWorkContract` (no generic “Follow up with X” as active).  
-Routine ambiguities use `autoClarifyRoutineAmbiguity`.  
-Malformed approvals fail `classifyApprovalForNeedsMe`.
+Routine ambiguities use `autoClarifyRoutineAmbiguity` **only when the title is vague** (never rewrite specific work/document titles).  
+Malformed approvals fail `classifyApprovalForNeedsMe` (missing recipient, requester, escalation, or action preview).
 
-## Reset
+## Reset (local only)
 
-Use existing Meridian/demo provision scripts with `--reset` then reseed.  
-Do not layer smoke-test noise on the live demo tenant without quarantine.
+```bash
+set -a; . ./.env.demo.local; set +a
+npx tsx scripts/heliogrid-demo-reset-seed.ts --reset   # DEMO RESET RUN 1
+npx tsx scripts/heliogrid-demo-reset-seed.ts --reset   # DEMO RESET RUN 2 — expect duplicate_active: 0
+```
+
+Script refuses non-localhost `DATABASE_URL`. Production NIOV Labs demo uses gated provision scripts separately; do not layer smoke-test noise on the live demo tenant without quarantine.

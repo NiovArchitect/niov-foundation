@@ -44,6 +44,22 @@ describe("approval-quarantine", () => {
     expect(q.active_reviewable).toBe(false);
   });
 
+  it("quarantines missing requester", () => {
+    const q = classifyApprovalForNeedsMe(
+      base({ requester_label: null }),
+    );
+    expect(q.active_reviewable).toBe(false);
+    expect(q.class).toBe("repairable");
+  });
+
+  it("quarantines missing action preview", () => {
+    const q = classifyApprovalForNeedsMe(
+      base({ action_type: "UNKNOWN" }),
+    );
+    expect(q.active_reviewable).toBe(false);
+    expect(q.class).toBe("invalid");
+  });
+
   it("partitions reviewable vs quarantined", () => {
     const { reviewable, quarantined } = partitionApprovalsForNeedsMe([
       base({ action_id: "ok" }),
