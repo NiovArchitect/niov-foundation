@@ -51,6 +51,7 @@ import type {
   Prisma,
 } from "@prisma/client";
 import { projectActionView, type SafeActionView } from "./views.js";
+import { classifyApprovalForNeedsMe } from "./approval-quarantine.js";
 import { safeApproverReason } from "../governance/escalation.service.js";
 import { getOrgEntityId } from "../governance/org.js";
 import { resolveEntityNames, type ResolvedName } from "../identity/resolve-entities.js";
@@ -446,28 +447,45 @@ export async function listActionsForCaller(
     }
   }
 
+  const projected = rows.map((r) =>
+    projectActionView(
+      r,
+      undefined,
+      {
+        ...labelsFor(
+          names,
+          effectiveTargetId(r.target_entity_id, r.payload_redacted),
+          r.source_entity_id,
+        ),
+        ...(r.status === "REJECTED" && r.escalation_id !== null
+          ? { not_approved_reason: reasonByEscalationId.get(r.escalation_id) ?? null }
+          : {}),
+      },
+    ),
+  );
+
+  // Slice 6 — quarantine malformed PROPOSED actions from active Needs me.
+  // When the client asks only for PROPOSED (approval queue), drop items that
+  // fail recipient / escalation gates. Admin org_scope lists keep all rows
+  // so repair remains possible (total still reflects DB page; items filtered).
+  const onlyProposed =
+    filters.status !== undefined &&
+    filters.status.length > 0 &&
+    filters.status.every((s) => s === "PROPOSED");
+  const items =
+    onlyProposed && filters.org_scope !== true
+      ? projected.filter((a) => classifyApprovalForNeedsMe(a).active_reviewable)
+      : projected;
+
   return {
     ok: true,
     httpStatus: 200,
     view: {
-      items: rows.map((r) =>
-        projectActionView(
-          r,
-          undefined,
-          {
-            ...labelsFor(
-              names,
-              effectiveTargetId(r.target_entity_id, r.payload_redacted),
-              r.source_entity_id,
-            ),
-            ...(r.status === "REJECTED" && r.escalation_id !== null
-              ? { not_approved_reason: reasonByEscalationId.get(r.escalation_id) ?? null }
-              : {}),
-          },
-        ),
-      ),
+      items,
       page: filters.page,
       page_size: filters.page_size,
+      // total stays the DB page total; items may be a reviewable subset
+      // (malformed PROPOSED quarantined). Clients use items.length for UI.
       total,
     },
   };

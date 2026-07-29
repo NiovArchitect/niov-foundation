@@ -1,0 +1,38 @@
+{
+  "title": "OTZAR — WHOLE-SYSTEM RECOVERY INTEGRATED CLOSURE (Slice 6)",
+  "date": "2026-07-29",
+  "status": "IN_PROGRESS_NOT_YC_READY",
+  "foundation_branch": "otzar/slice-6-work-contract-quarantine-clarify",
+  "pr": "https://github.com/NiovArchitect/niov-foundation/pull/755",
+  "preserve_slices_1_to_5": true,
+  "closed_this_campaign": {
+    "server_work_contract": "enforceWorkContract + serverHumanWorkTitle at createLedgerEntry; vague demoted to PROPOSED",
+    "server_complete_gate": "getMyWork can_complete false only for vague titles and EXECUTING (specific PROPOSED completable)",
+    "approval_quarantine": "listActionsForCaller filters non-reviewable PROPOSED; gates recipient + requester + escalation + action_type",
+    "auto_clarify": "autoClarifyRoutineAmbiguity only when isVagueWorkTitle; skips DOCUMENT_CONTEXT/ORG_SEEDING/GOAL; market pattern requires signal on raw phrase",
+    "demo_narrative": "HelioGrid fictional seed doctrine + 5 transcripts + local heliogrid-demo-reset-seed.ts",
+    "founder_walkthrough_script": "docs/product/OTZAR_FOUNDER_TWO_MINUTE_WALKTHROUGH.md"
+  },
+  "python_role": "EXPLICIT: advisory async enrichment only; primary extraction TypeScript; UI never shows Python status or errors",
+  "required_python_runtime": "NOT required for work contract / quarantine / auto-clarify path; keep as evaluation gate",
+  "primary_python_error_copy": 0,
+  "still_open_external_or_large": [
+    "Full multi-persona live seed on production tenant (needs founder-gated provision)",
+    "Real Google OAuth consent + production identity",
+    "Calendar/Gmail/Drive runtime proof with founder credentials",
+    "Full portable export/import",
+    "Scheduled report runner",
+    "Full screen census + a11y matrix automation on Control Tower",
+    "Founder experience verdict"
+  ],
+  "prohibited_claims_until_proof": [
+    "YC release ready",
+    "Google Workspace fully connected without live OAuth",
+    "All personas live on production without seed proof",
+    "Scheduled reports generating without runner"
+  ],
+  "caretaker_relay_touched": "NO",
+  "background_workers": 0,
+  "founder_experience": "AWAITING FOUNDER REVIEW",
+  "yc_release_candidate": "NOT READY UNTIL FOUNDER APPROVAL"
+}

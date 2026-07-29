@@ -41,6 +41,12 @@ import {
   projectRoutingDecision,
   type RoutingDecisionView,
 } from "./routing-decision.js";
+import {
+  cannotCompleteSafely,
+  enforceWorkContract,
+  isVagueWorkTitle,
+} from "./work-contract.js";
+import { autoClarifyRoutineAmbiguity } from "./auto-clarify.js";
 
 // Slice F — UUID shape guard for the ledger→Action link backfill on
 // patchLedgerEntry (proposed_action_id / audit_event_id).
@@ -171,10 +177,57 @@ export async function createLedgerEntry(
   if (!LEDGER_TYPES.includes(input.ledger_type as (typeof LEDGER_TYPES)[number])) {
     return { ok: false, code: "INVALID_REQUEST", message: "invalid ledger_type" };
   }
-  const status = input.status ?? "DRAFT";
+  const requestedStatus = input.status ?? "DRAFT";
+  if (!LEDGER_STATUSES.includes(requestedStatus as (typeof LEDGER_STATUSES)[number])) {
+    return { ok: false, code: "INVALID_REQUEST", message: "invalid status" };
+  }
+  // Slice 6 — autonomous clarification ONLY for vague follow-up titles.
+  // Never rewrite specific work/document titles (e.g. "Phoenix launch
+  // checklist", "Support escalation SOP") or non-employee ledger types.
+  // Project/summary text alone must not trigger rewrites — market/evidence
+  // patterns previously matched innocuous document bodies ("Reference material").
+  let workingTitle = input.title;
+  let workingSummary = input.summary;
+  let autoClarifyProof: string | undefined;
+  const nonEmployeeLedger =
+    input.ledger_type === "ORG_SEEDING" ||
+    input.ledger_type === "GOAL" ||
+    input.ledger_type === "DOCUMENT_CONTEXT" ||
+    input.ledger_type === "DOCUMENT";
+  if (!nonEmployeeLedger && isVagueWorkTitle(input.title)) {
+    const clarified = autoClarifyRoutineAmbiguity({
+      raw_phrase: input.title,
+      project_subject:
+        typeof input.details?.project_subject === "string"
+          ? input.details.project_subject
+          : null,
+      dependency:
+        typeof input.details?.dependency === "string"
+          ? input.details.dependency
+          : null,
+    });
+    if (clarified.clarified && !clarified.needs_human) {
+      workingTitle = clarified.title;
+      workingSummary = clarified.summary;
+      autoClarifyProof = clarified.proof;
+    }
+  }
+  // Server-side minimum work contract + title at create time.
+  // Vague "Follow up with X" cannot become active employee work.
+  const contract = enforceWorkContract({
+    title: workingTitle,
+    summary: workingSummary,
+    status: requestedStatus,
+    ledger_type: input.ledger_type,
+  });
+  if (!contract.ok) {
+    return { ok: false, code: contract.code, message: contract.message };
+  }
+  const status = contract.status;
   if (!LEDGER_STATUSES.includes(status as (typeof LEDGER_STATUSES)[number])) {
     return { ok: false, code: "INVALID_REQUEST", message: "invalid status" };
   }
+  const title = contract.title;
   let extraction = input.extraction_source ?? "TYPESCRIPT_DETERMINISTIC";
   if (!EXTRACTION_SOURCES.includes(extraction as (typeof EXTRACTION_SOURCES)[number])) {
     return { ok: false, code: "INVALID_REQUEST", message: "invalid extraction_source" };
@@ -196,6 +249,19 @@ export async function createLedgerEntry(
     ...(enrichmentRequested
       ? { python_enrichment: pendingEnvelope("WORK_SIGNAL_EXTRACTION", new Date().toISOString()) }
       : {}),
+    ...(contract.demoted
+      ? {
+          work_contract: {
+            demoted: true,
+            reason: contract.reason ?? "minimum_work_contract",
+            original_title: input.title,
+            original_status: requestedStatus,
+          },
+        }
+      : {}),
+    ...(autoClarifyProof
+      ? { auto_clarify: { proof: autoClarifyProof, applied: true } }
+      : {}),
   };
 
   const row = await prisma.workLedgerEntry.create({
@@ -214,8 +280,10 @@ export async function createLedgerEntry(
       ...(optStr(input.requester_entity_id) ? { requester_entity_id: input.requester_entity_id } : {}),
       ...(optStr(input.owner_entity_id) ? { owner_entity_id: input.owner_entity_id } : {}),
       ...(optStr(input.target_entity_id) ? { target_entity_id: input.target_entity_id } : {}),
-      title: input.title,
-      ...(optStr(input.summary) ? { summary: input.summary } : {}),
+      title,
+      ...(optStr(workingSummary ?? input.summary)
+        ? { summary: (workingSummary ?? input.summary) as string }
+        : {}),
       details: detailsWithEnrichment as object,
       priority: input.priority ?? "ROUTINE",
       status,
@@ -682,7 +750,12 @@ export async function getMyWork(args: {
   const DONE = new Set(["EXECUTED", "VERIFIED", "CANCELLED", "EXPIRED"]);
   rows.forEach((row, i) => {
     if (row.owner_entity_id === args.caller_entity_id && !DONE.has(row.status)) {
-      entries[i]!.can_complete = true;
+      // Slice 6 — server gate: vague / PROPOSED cannot be marked complete.
+      if (
+        !cannotCompleteSafely({ title: row.title, status: row.status })
+      ) {
+        entries[i]!.can_complete = true;
+      }
     }
   });
   // [PROD-UX-P0R] — attach the routing/autonomy decision projection to every
