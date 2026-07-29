@@ -83,18 +83,53 @@ function statusFor(failure: ConnectorOAuthFailure): number {
   }
 }
 
-// WHAT: Minimal HTML for the browser-facing callback outcome.
-// INPUT: ok flag + display label (closed-vocab provider name only).
-// OUTPUT: A short self-contained HTML page.
-// WHY: The admin lands here from the provider consent screen; the
-//      page says exactly one honest thing and sends them back to
-//      Otzar. No script, no secrets, no user-controlled content.
-function callbackHtml(ok: boolean, label: string): string {
-  const title = ok ? `${label} connected` : `${label} connection failed`;
-  const body = ok
-    ? "The connection was authorized. You can close this tab and return to Otzar — use Verify in Integrations to confirm it works end-to-end."
-    : "The connection was not completed. Close this tab, return to Otzar, and try Connect again from Integrations.";
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title></head><body style="font-family: system-ui, sans-serif; max-width: 40rem; margin: 4rem auto; line-height: 1.5;"><h1 style="font-size: 1.25rem;">${title}</h1><p>${body}</p></body></html>`;
+// WHAT: Resolve the Control Tower origin for post-OAuth browser return.
+// INPUT: none (CONTROL_TOWER_URL env).
+// OUTPUT: origin string without trailing slash.
+// WHY: Callback must return the employee to Otzar Connections, not a
+//      dead "close this tab" page. Open-redirect safe: only env origin.
+function controlTowerOrigin(): string {
+  const raw = process.env.CONTROL_TOWER_URL ?? "https://app.otzar.ai";
+  return raw.replace(/\/+$/, "");
+}
+
+// WHAT: Safe provider slug fragment for CT query params (alpha only).
+// INPUT: provider path param.
+// OUTPUT: lowercase a-z only.
+function safeProviderSlug(provider: string): string {
+  return provider.toLowerCase().replace(/[^a-z]/g, "").slice(0, 32);
+}
+
+// WHAT: HTML for browser-facing OAuth callback with auto-return to Otzar.
+// INPUT: outcome (connected | failed | denied) + provider slug + display label.
+// OUTPUT: Self-contained HTML with meta-refresh + fallback link.
+// WHY: Slice 3 — employee must land on Connections with context, not a
+//      developer Integrations maze. No secrets, no user-controlled URLs.
+function callbackHtml(
+  outcome: "connected" | "failed" | "denied",
+  providerSlug: string,
+  label: string,
+): string {
+  const tool = safeProviderSlug(providerSlug) || "tool";
+  const display =
+    label.replace(/[<>&"']/g, "").slice(0, 80) || "Tool";
+  const ct = controlTowerOrigin();
+  // Employee primary Connections surface (not admin tools-connections).
+  const returnUrl = `${ct}/app/connector-health?oauth=${outcome}&tool=${encodeURIComponent(tool)}`;
+  const title =
+    outcome === "connected"
+      ? `${display} connected`
+      : outcome === "denied"
+        ? `${display} connection cancelled`
+        : `${display} connection failed`;
+  const body =
+    outcome === "connected"
+      ? `${display} is connected. Returning you to Otzar…`
+      : outcome === "denied"
+        ? `You cancelled ${display} authorization. Returning you to Otzar so you can try again.`
+        : `${display} was not connected. Returning you to Otzar so you can try again.`;
+  // Meta-refresh + noscript link. No inline JS required for the happy path.
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=${returnUrl}"><title>${title}</title></head><body style="font-family: system-ui, sans-serif; max-width: 40rem; margin: 4rem auto; line-height: 1.5; color: #111;"><h1 style="font-size: 1.25rem;">${title}</h1><p>${body}</p><p><a href="${returnUrl}">Continue to Otzar Connections</a></p></body></html>`;
 }
 
 // WHAT: Register the 5 Phase 1261 OAuth connector routes.
@@ -142,13 +177,19 @@ export async function registerConnectorOAuthRoutes(
     "/api/v1/connectors/oauth/callback/:provider",
     async (request, reply) => {
       const { code, state, error } = request.query;
-      const label = request.params.provider.replace(/[^a-z]/g, "");
+      const providerSlug = request.params.provider;
+      const label = providerSlug.replace(/[^a-zA-Z0-9 _-]/g, "") || "Tool";
       if (typeof error === "string" && error.length > 0) {
         // Consent denied / provider error: nothing exchanged.
+        // access_denied → denied; other provider errors → failed.
+        const outcome =
+          error === "access_denied" || error === "user_denied"
+            ? "denied"
+            : "failed";
         return reply
           .code(400)
           .type("text/html")
-          .send(callbackHtml(false, label));
+          .send(callbackHtml(outcome, providerSlug, label));
       }
       if (
         typeof code !== "string" ||
@@ -159,7 +200,7 @@ export async function registerConnectorOAuthRoutes(
         return reply
           .code(400)
           .type("text/html")
-          .send(callbackHtml(false, label));
+          .send(callbackHtml("failed", providerSlug, label));
       }
       const result = await handleOAuthCallback({
         provider_slug: request.params.provider,
@@ -170,12 +211,18 @@ export async function registerConnectorOAuthRoutes(
         return reply
           .code(200)
           .type("text/html")
-          .send(callbackHtml(true, result.display_name));
+          .send(
+            callbackHtml(
+              "connected",
+              providerSlug,
+              result.display_name,
+            ),
+          );
       }
       return reply
         .code(statusFor(result))
         .type("text/html")
-        .send(callbackHtml(false, label));
+        .send(callbackHtml("failed", providerSlug, label));
     },
   );
 

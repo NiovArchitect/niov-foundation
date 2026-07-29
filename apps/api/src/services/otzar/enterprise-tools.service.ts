@@ -237,6 +237,8 @@ export type EnterpriseToolsCatalogView = {
       status: ToolConnectStatus;
       status_label: string;
       connect_action: "oauth_start" | "request_admin" | "none" | "reconnect";
+      /** Connected identity label when known (email / team name). Never tokens. */
+      account_label: string | null;
     }>;
   }>;
   generated_at: string;
@@ -320,6 +322,7 @@ export async function getEnterpriseToolsCatalogForCaller(
         status: st,
         status_label: statusLabel(st),
         connect_action,
+        account_label: o?.account_label ?? null,
       };
     });
     const best = providers.reduce(
@@ -339,12 +342,13 @@ export async function getEnterpriseToolsCatalogForCaller(
 
   const connectedN = capabilities.filter((c) => c.status === "connected").length;
   const readyN = capabilities.filter((c) => c.status === "ready_to_connect").length;
+  // Slice 3 — plain employee language (no capability-area / MCP jargon).
   const headline =
     connectedN > 0
-      ? `${connectedN} capability area${connectedN === 1 ? "" : "s"} connected — connect more when work needs them.`
+      ? `${connectedN} work tool${connectedN === 1 ? "" : "s"} connected. Connect more when you need them.`
       : readyN > 0
-        ? "Tools are ready — connect the ones your role needs in a few clicks."
-        : "Ask an admin to enable tools for your organization, then connect what you use.";
+        ? "Connect the tools you already use so your AI Teammate can help within your permissions."
+        : "Ask an administrator to enable work tools for your organization, then connect what you use.";
 
   return {
     ok: true,
