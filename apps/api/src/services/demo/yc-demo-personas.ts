@@ -25,13 +25,17 @@ export interface DemoPersonaDef {
  * WHAT: Canonical HelioGrid review personas for the YC Labs tenant.
  * WHY: Stable keys for launcher + Talk bank; emails match live provision.
  */
+/**
+ * Story order: Leadership → Review ownership → Specialist diligence →
+ * Operations → Contributors. One connected HelioGrid review process.
+ */
 export const YC_DEMO_PERSONAS: readonly DemoPersonaDef[] = [
   {
     key: "organization_lead",
     display_name: "Y Combinator",
     role_title: "Organization lead",
     card_blurb:
-      "See management results, meaningful decisions, and organization-wide coordination.",
+      "See the current recommendation, material risk, what Otzar handled, and the one decision that may still need leadership.",
     email: "demo@otzar.ai",
     relationship: "employee",
     is_admin: true,
@@ -41,7 +45,7 @@ export const YC_DEMO_PERSONAS: readonly DemoPersonaDef[] = [
     display_name: "Ava Chen",
     role_title: "Application review lead",
     card_blurb:
-      "See recommendation, evidence, conditions, and interview readiness.",
+      "Own the review journey: recommendation, dependencies, and interview readiness.",
     email: "ava.chen+meridian@niovlabs.com",
     relationship: "employee",
     is_admin: false,
@@ -50,7 +54,7 @@ export const YC_DEMO_PERSONAS: readonly DemoPersonaDef[] = [
     key: "technical_diligence_lead",
     display_name: "Jordan Hale",
     role_title: "Technical diligence lead",
-    card_blurb: "See technical work, dependencies, evidence, and AI support.",
+    card_blurb: "See technical work, evidence gaps, and what blocks advance.",
     email: "jordan.hale+meridian@niovlabs.com",
     relationship: "employee",
     is_admin: false,
@@ -59,7 +63,8 @@ export const YC_DEMO_PERSONAS: readonly DemoPersonaDef[] = [
     key: "security_lead",
     display_name: "Casey Nguyen",
     role_title: "Security lead",
-    card_blurb: "See the security gate, checklist, and who is waiting.",
+    card_blurb:
+      "See the security gate, who is waiting, and the exact remaining controls.",
     email: "casey.nguyen+meridian@niovlabs.com",
     relationship: "employee",
     is_admin: false,
@@ -75,20 +80,22 @@ export const YC_DEMO_PERSONAS: readonly DemoPersonaDef[] = [
     is_admin: false,
   },
   {
-    key: "regular_reviewer",
-    display_name: "Morgan Lee",
-    role_title: "Regular reviewer",
-    card_blurb: "See focused personal work and normal employee experience.",
-    email: "morgan.lee+meridian@niovlabs.com",
+    key: "program_coordinator",
+    display_name: "Sam Rivera",
+    role_title: "Program coordinator",
+    card_blurb:
+      "Keep scheduling, handoffs, and report delivery moving without noise.",
+    email: "sam.rivera+meridian@niovlabs.com",
     relationship: "employee",
     is_admin: false,
   },
   {
-    key: "program_coordinator",
-    display_name: "Sam Rivera",
-    role_title: "Program coordinator",
-    card_blurb: "See scheduling, report delivery, and remaining ops work.",
-    email: "sam.rivera+meridian@niovlabs.com",
+    key: "regular_reviewer",
+    display_name: "Morgan Lee",
+    role_title: "Regular reviewer",
+    card_blurb:
+      "Receive a focused assignment without organization-wide noise.",
+    email: "morgan.lee+meridian@niovlabs.com",
     relationship: "employee",
     is_admin: false,
   },
@@ -96,7 +103,8 @@ export const YC_DEMO_PERSONAS: readonly DemoPersonaDef[] = [
     key: "contractor",
     display_name: "Quinn Marsh",
     role_title: "Contractor researcher",
-    card_blurb: "See bounded work and intentionally limited access.",
+    card_blurb:
+      "Contribute bounded expertise without broad internal access.",
     email: "quinn.marsh+meridian@niovlabs.com",
     relationship: "contractor",
     is_admin: false,
