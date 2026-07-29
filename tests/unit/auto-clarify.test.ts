@@ -18,6 +18,14 @@ describe("autoClarifyRoutineAmbiguity", () => {
     expect(r.summary).toMatch(/encryption|security|checklist|interview/i);
   });
 
+  it("does not rewrite ordinary checklist titles as security gates", () => {
+    const r = autoClarifyRoutineAmbiguity({
+      raw_phrase: "Phoenix launch checklist",
+    });
+    // No person + no security signal → not auto-rewritten as security gate
+    expect(r.title).not.toMatch(/security lead|interview invite/i);
+  });
+
   it("needs human when no person or project signal", () => {
     const r = autoClarifyRoutineAmbiguity({
       raw_phrase: "We should circle back sometime.",

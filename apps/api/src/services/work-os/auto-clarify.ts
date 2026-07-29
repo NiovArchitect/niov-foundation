@@ -45,11 +45,10 @@ export function autoClarifyRoutineAmbiguity(
 
   const name = withName ?? null;
 
-  // Security checklist pattern
+  // Security gate pattern — require security/encrypt signals (not bare "checklist").
   if (
-    /security|checklist|encrypt|control/i.test(raw) ||
-    /security|checklist|encrypt/i.test(dep) ||
-    /security|checklist/i.test(project)
+    /security|encrypt|data.?rights|controls?\b/i.test(raw + " " + dep + " " + project) ||
+    (/checklist/i.test(raw) && /security|encrypt|gate/i.test(raw + " " + dep + " " + project))
   ) {
     const who = name ?? "the security lead";
     const subj = project.length > 0 ? project : "the application review";
