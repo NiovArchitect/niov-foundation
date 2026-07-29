@@ -47,6 +47,10 @@ import {
   isVagueWorkTitle,
 } from "./work-contract.js";
 import { autoClarifyRoutineAmbiguity } from "./auto-clarify.js";
+import {
+  authorizeLedgerPatch,
+  type LedgerPatchField,
+} from "./ledger-patch-auth.js";
 
 // Slice F — UUID shape guard for the ledger→Action link backfill on
 // patchLedgerEntry (proposed_action_id / audit_event_id).
@@ -642,15 +646,39 @@ export async function patchLedgerEntry(args: {
 }): Promise<{ ok: true; entry: WorkLedgerView } | LedgerFailure> {
   const existing = await getLedgerEntry(args);
   if (existing.ok === false) return existing;
+  const e = existing.entry;
+
+  // Build the set of fields present so field-level auth can deny partial
+  // overreach (e.g. target-only, requester completing owner work).
+  const fields: LedgerPatchField[] = [];
+  if (args.patch.status !== undefined) fields.push("status");
+  if (args.patch.next_action !== undefined) fields.push("next_action");
+  if (args.patch.priority !== undefined) fields.push("priority");
+  if (args.patch.project_id !== undefined) fields.push("project_id");
+  if (args.patch.proposed_action_id !== undefined) fields.push("proposed_action_id");
+  if (args.patch.audit_event_id !== undefined) fields.push("audit_event_id");
+
+  const authz = authorizeLedgerPatch({
+    caller_entity_id: args.caller_entity_id,
+    is_manager: args.is_manager,
+    owner_entity_id: e.owner_entity_id,
+    requester_entity_id: e.requester_entity_id,
+    target_entity_id: e.target_entity_id,
+    fields,
+    ...(args.patch.status !== undefined
+      ? { next_status: args.patch.status }
+      : {}),
+  });
+  if (authz.ok === false) {
+    return {
+      ok: false,
+      code: authz.code,
+      message: authz.message,
+    };
+  }
+
   const data: Record<string, unknown> = {};
   if (args.patch.project_id !== undefined) {
-    if (!args.is_manager) {
-      return {
-        ok: false,
-        code: "FORBIDDEN",
-        message: "only a manager can re-link project_id",
-      };
-    }
     if (args.patch.project_id === null) {
       data.project_id = null;
     } else if (!UUID_RE.test(args.patch.project_id)) {
@@ -666,26 +694,6 @@ export async function patchLedgerEntry(args: {
   if (args.patch.status !== undefined) {
     if (!LEDGER_STATUSES.includes(args.patch.status as (typeof LEDGER_STATUSES)[number])) {
       return { ok: false, code: "INVALID_REQUEST", message: "invalid status" };
-    }
-    // Completion authority (Phase 1285-E): only the OWNER (the doer) or a
-    // manager may mark a task DONE (EXECUTED/VERIFIED) — a requester must not
-    // self-complete the other person's work. The REQUESTER (or owner/manager)
-    // may CANCEL (withdraw) the ask. getLedgerEntry already guarantees the
-    // caller is a participant, so this only narrows the done/cancel verbs.
-    const e = existing.entry;
-    const isOwner = e.owner_entity_id === args.caller_entity_id;
-    const isRequester = e.requester_entity_id === args.caller_entity_id;
-    const DONE_STATUSES = new Set(["EXECUTED", "VERIFIED"]);
-    if (DONE_STATUSES.has(args.patch.status) && !args.is_manager && !isOwner) {
-      return { ok: false, code: "FORBIDDEN", message: "only the owner can mark this complete" };
-    }
-    if (
-      args.patch.status === "CANCELLED" &&
-      !args.is_manager &&
-      !isOwner &&
-      !isRequester
-    ) {
-      return { ok: false, code: "FORBIDDEN", message: "only the owner or requester can cancel" };
     }
     data.status = args.patch.status;
     if (args.patch.status === "VERIFIED") data.verified_at = new Date();
