@@ -1,0 +1,77 @@
+{
+  "title": "OTZAR — PRODUCTION YC DEMO AND MULTI-PERSONA CLOSURE",
+  "date": "2026-07-29",
+  "status": "PARTIAL_LIVE_NOT_FOUNDER_READY",
+  "classification": {
+    "closed_prior_backend": [
+      "server work contract",
+      "server human-title generation",
+      "vague demotion",
+      "malformed approval filtering",
+      "bounded auto-clarify",
+      "local reset idempotency",
+      "five fictional transcripts"
+    ],
+    "closed_this_campaign": [
+      "production YC Labs HelioGrid reseed (API-gated, twice)",
+      "vague active archive on demo tenant",
+      "multi-persona work projections",
+      "two AI collaborations (Ava↔Casey security, Riley↔Ava customer) with work updates",
+      "multi-persona Talk bank grounded answers (4/5; contractor twin missing)",
+      "persona launcher API + CT /demo/yc (requires env flag deploy)",
+      "How the team moved UI projection"
+    ],
+    "not_closed": [
+      "DEMO_PERSONA_LAUNCHER_ENABLED live on Render",
+      "contractor twin provision for Talk",
+      "full walkthrough browser proof",
+      "full screen/asset census",
+      "session security matrix",
+      "load/responsive/a11y full matrices",
+      "scheduled report runner",
+      "Google OAuth runtime",
+      "founder experience approval"
+    ]
+  },
+  "foundation_source": "PR #757 otzar/prod-yc-demo-multi-persona",
+  "foundation_live_at_report": "07563ef (pre-launcher deploy)",
+  "control_tower_source": "PR branch otzar/yc-demo-persona-launcher",
+  "control_tower_live": "6b2862c8 / assets/index-BcLEWVoJ.js",
+  "demo_tenant": {
+    "org": "Y Combinator Labs",
+    "org_entity_id": "ac06749c-e7a1-46f8-943c-7a27b69d451d",
+    "admin_email": "demo@otzar.ai",
+    "startup": "HelioGrid (fictional)",
+    "recommendation": "conditional_interview"
+  },
+  "production_reset": {
+    "run_1": "PASS",
+    "run_2": "PASS (idempotent skip existing work)",
+    "duplicates": 0,
+    "vague_active_remaining_after_cleanup": 0
+  },
+  "collaborations": {
+    "security": "74412ef7-1756-43ae-a685-b241c344b5bc",
+    "customer": "ba8c105e-84b5-4f50-b9c1-551c4d09c86f",
+    "work_updates_applied": true
+  },
+  "talk_bank": {
+    "org": "PASS — conditional interview grounded",
+    "ava": "PASS — data-rights blocking invite",
+    "casey": "PASS — security checklist owned",
+    "riley": "PASS — references not fully confirmed",
+    "quinn": "FAIL — Caller has no digital twin",
+    "false_opened_claims": 0
+  },
+  "persona_launcher": {
+    "foundation_routes": "GET/POST /api/v1/demo/yc-labs/*",
+    "ct_route": "/demo/yc",
+    "passwords_in_frontend": 0,
+    "requires_env": "DEMO_PERSONA_LAUNCHER_ENABLED=true"
+  },
+  "founder_review_url_intended": "https://app.otzar.ai/demo/yc",
+  "caretaker_relay_touched": "NO",
+  "background_workers": 0,
+  "founder_experience": "AWAITING FOUNDER REVIEW",
+  "yc_release_candidate": "NOT READY UNTIL FOUNDER APPROVAL"
+}
