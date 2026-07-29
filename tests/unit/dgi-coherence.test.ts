@@ -40,6 +40,8 @@ function baseSnap(
     eligible_twin_count: 1,
     open_obligations_count: 0,
     open_obligation_titles: [],
+    open_active_work_count: 0,
+    open_active_work_titles: [],
     open_org_truth_conflicts_count: 0,
     open_incoming_handoffs_count: 0,
     open_incoming_handoff_titles: [],
@@ -49,6 +51,8 @@ function baseSnap(
     open_obligations_count: 0,
     open_obligation_titles: [],
     open_obligation_ids: [],
+    open_active_work_count: 0,
+    open_active_work_titles: [],
     open_org_truth_conflicts_count: 0,
     open_org_truth_conflict_ids: [],
     active_personal_corrections_count: 0,
@@ -153,6 +157,26 @@ describe("deriveNextBestStep", () => {
     expect(step.kind).toBe("ADVANCE_OBLIGATION");
     expect(step.reason).toContain("Ship release notes");
   });
+
+  it("advances My Work ledger before grant-authority when no obligations", () => {
+    const step = deriveNextBestStep({
+      twin_pairing_status: "OK",
+      eligible_twin_count: 1,
+      open_obligations_count: 0,
+      open_obligation_titles: [],
+      open_active_work_count: 1,
+      open_active_work_titles: [
+        "Quinn: research NovaGuard vendor control gaps for Casey",
+      ],
+      open_org_truth_conflicts_count: 0,
+      open_incoming_handoffs_count: 0,
+      open_incoming_handoff_titles: [],
+      active_twin_authority_grants_count: 0,
+    });
+    expect(step.kind).toBe("ADVANCE_ACTIVE_WORK");
+    expect(step.reason).toMatch(/NovaGuard/i);
+    expect(step.route_hint).toBe("/app/my-work");
+  });
 });
 
 describe("deriveCoherenceSignals", () => {
@@ -212,6 +236,36 @@ describe("renderDgiSystemBlock", () => {
     expect(text).toContain("Ship release notes");
     expect(text).toContain("Do not invent a winner");
     expect(text).toContain("REVIEW_ORG_TRUTH");
+  });
+
+  it("surfaces assigned My Work titles so Talk cannot claim no tasks", () => {
+    const step = deriveNextBestStep({
+      twin_pairing_status: "OK",
+      eligible_twin_count: 1,
+      open_obligations_count: 0,
+      open_obligation_titles: [],
+      open_active_work_count: 1,
+      open_active_work_titles: [
+        "Quinn: research NovaGuard vendor control gaps for Casey",
+      ],
+      open_org_truth_conflicts_count: 0,
+      open_incoming_handoffs_count: 0,
+      open_incoming_handoff_titles: [],
+      active_twin_authority_grants_count: 0,
+    });
+    const snap = baseSnap({
+      open_active_work_count: 1,
+      open_active_work_titles: [
+        "Quinn: research NovaGuard vendor control gaps for Casey",
+      ],
+      next_best_step: step,
+      coherence_status: "NEEDS_ATTENTION",
+      attention_count: 1,
+    });
+    const text = renderDgiSystemBlock(snap);
+    expect(text).toContain("NovaGuard");
+    expect(text).toContain("Do not claim they have no tasks");
+    expect(text).toContain("ADVANCE_ACTIVE_WORK");
   });
 });
 
