@@ -61,8 +61,9 @@ export function autoClarifyRoutineAmbiguity(
     };
   }
 
-  // Customer evidence pattern
-  if (/customer|reference|market|evidence/i.test(raw + project + dep)) {
+  // Customer evidence pattern — require signal on the raw phrase itself
+  // (not project_subject alone: document bodies often say "Reference material").
+  if (/customer|reference|market|evidence/i.test(raw)) {
     const who = name ?? "the market lead";
     return {
       clarified: true,

@@ -26,6 +26,15 @@ describe("autoClarifyRoutineAmbiguity", () => {
     expect(r.title).not.toMatch(/security lead|interview invite/i);
   });
 
+  it("does not treat document body 'Reference material' as market evidence", () => {
+    const r = autoClarifyRoutineAmbiguity({
+      raw_phrase: "Support escalation SOP",
+      project_subject: "Reference material.",
+    });
+    expect(r.clarified).toBe(false);
+    expect(r.title).not.toMatch(/market lead|customer evidence/i);
+  });
+
   it("needs human when no person or project signal", () => {
     const r = autoClarifyRoutineAmbiguity({
       raw_phrase: "We should circle back sometime.",

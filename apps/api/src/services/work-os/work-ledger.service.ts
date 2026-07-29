@@ -44,6 +44,7 @@ import {
 import {
   cannotCompleteSafely,
   enforceWorkContract,
+  isVagueWorkTitle,
 } from "./work-contract.js";
 import { autoClarifyRoutineAmbiguity } from "./auto-clarify.js";
 
@@ -180,19 +181,26 @@ export async function createLedgerEntry(
   if (!LEDGER_STATUSES.includes(requestedStatus as (typeof LEDGER_STATUSES)[number])) {
     return { ok: false, code: "INVALID_REQUEST", message: "invalid status" };
   }
-  // Slice 6 — try autonomous clarification before demoting vague titles.
+  // Slice 6 — autonomous clarification ONLY for vague follow-up titles.
+  // Never rewrite specific work/document titles (e.g. "Phoenix launch
+  // checklist", "Support escalation SOP") or non-employee ledger types.
+  // Project/summary text alone must not trigger rewrites — market/evidence
+  // patterns previously matched innocuous document bodies ("Reference material").
   let workingTitle = input.title;
   let workingSummary = input.summary;
   let autoClarifyProof: string | undefined;
-  {
+  const nonEmployeeLedger =
+    input.ledger_type === "ORG_SEEDING" ||
+    input.ledger_type === "GOAL" ||
+    input.ledger_type === "DOCUMENT_CONTEXT" ||
+    input.ledger_type === "DOCUMENT";
+  if (!nonEmployeeLedger && isVagueWorkTitle(input.title)) {
     const clarified = autoClarifyRoutineAmbiguity({
       raw_phrase: input.title,
       project_subject:
         typeof input.details?.project_subject === "string"
           ? input.details.project_subject
-          : typeof input.summary === "string"
-            ? input.summary
-            : null,
+          : null,
       dependency:
         typeof input.details?.dependency === "string"
           ? input.details.dependency
