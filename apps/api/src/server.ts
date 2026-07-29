@@ -182,6 +182,7 @@ import { registerAdminLlmStatusRoutes } from "./routes/admin-llm-status.routes.j
 import { registerAuthRoutes } from "./routes/auth.routes.js";
 import { registerDemoPersonaRoutes } from "./routes/demo-persona.routes.js";
 import { registerOtzarExecutiveBriefRoutes } from "./routes/otzar-executive-brief.routes.js";
+import { registerOtzarOvernightRoutes } from "./routes/otzar-overnight.routes.js";
 import { registerInboundSignalRoutes } from "./routes/inbound-signal.routes.js";
 import { registerCosmpRoutes } from "./routes/cosmp.routes.js";
 import { registerVoiceRoutes } from "./routes/voice.routes.js";
@@ -810,6 +811,8 @@ export async function buildApp(
   await registerDemoPersonaRoutes(app, authService);
   // Daily executive brief — schedule + run-now + in-Otzar delivery (no email/Slack).
   await registerOtzarExecutiveBriefRoutes(app, authService);
+  // Quiet-hours overnight coordination + morning brief (test clock supported).
+  await registerOtzarOvernightRoutes(app, authService);
   // [INBOUND-SIGNAL · Slice 2] the bearer-less HMAC-signed inbound event rail.
   await registerInboundSignalRoutes(
     app,
