@@ -257,25 +257,30 @@ export async function registerWorkOsLedgerRoutes(
       };
       const coord = await dispatchWorkOsEvent(event);
 
-      // Phase 1282 — record the BEAM fanout as execution evidence. VERIFIED
-      // only on a proven BEAM accept; FAILED otherwise (honest — never a
-      // fake green). Best-effort: never blocks the response.
-      await recordExecutionAttempt({
-        ledger_entry_id: entry.ledger_entry_id,
-        org_entity_id: entry.org_entity_id,
-        attempt_type: "BEAM_FANOUT",
-        runtime: "BEAM",
-        evidence_type: "PROVIDER_RESPONSE",
-        status: coord.coordination_runtime === "BEAM_DISPATCHED" ? "VERIFIED" : "FAILED",
-        detail: {
-          coordination_runtime: coord.coordination_runtime,
-          ...(coord.watcher !== undefined ? { watcher: coord.watcher } : {}),
-          event_type: event.event_type,
-        },
-        ...(coord.coordination_runtime === "BEAM_DISPATCHED"
-          ? {}
-          : { error_code: coord.error_code ?? coord.coordination_runtime }),
-      });
+      // Phase 1282 — BEAM fanout evidence.
+      // Founder recovery: BEAM_UNAVAILABLE / TYPESCRIPT_ONLY are healthy
+      // TypeScript-only posture — NOT verification failures. Only true
+      // BEAM_FAILED is recorded as FAILED (human-facing blind-spot eligible).
+      const beamOk = coord.coordination_runtime === "BEAM_DISPATCHED";
+      const beamHardFail = coord.coordination_runtime === "BEAM_FAILED";
+      if (beamOk || beamHardFail) {
+        await recordExecutionAttempt({
+          ledger_entry_id: entry.ledger_entry_id,
+          org_entity_id: entry.org_entity_id,
+          attempt_type: "BEAM_FANOUT",
+          runtime: "BEAM",
+          evidence_type: "PROVIDER_RESPONSE",
+          status: beamOk ? "VERIFIED" : "FAILED",
+          detail: {
+            coordination_runtime: coord.coordination_runtime,
+            ...(coord.watcher !== undefined ? { watcher: coord.watcher } : {}),
+            event_type: event.event_type,
+          },
+          ...(beamHardFail
+            ? { error_code: coord.error_code ?? coord.coordination_runtime }
+            : {}),
+        });
+      }
 
       // Phase 1283 PART E + F — persist the coordination summary onto the
       // ledger row's details and create internal watcher state (BEAM

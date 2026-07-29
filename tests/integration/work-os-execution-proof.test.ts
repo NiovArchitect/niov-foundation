@@ -132,13 +132,56 @@ describe("execution proof layer", () => {
     expect(item?.coordination?.runtime).toBeDefined();
   });
 
-  it("surfaces a FAILED execution attempt in Blind Spots as a runtime issue", async () => {
+  it("does not promote soft BEAM/Python fails into human Blind Spots", async () => {
+    // Founder recovery: optional BEAM fanout / Python enrichment soft-fails
+    // are infrastructure noise — never employee verification labor.
     const { token, entityId } = await login();
-    const lid = await createLedger(token, { ledger_type: "TASK", title: "proof blind", owner_entity_id: entityId });
+    const softId = await createLedger(token, {
+      ledger_type: "TASK",
+      title: "proof soft beam",
+      owner_entity_id: entityId,
+    });
     await prisma.executionAttempt.create({
       data: {
-        ledger_entry_id: lid, org_entity_id: ORG_ID, attempt_type: "BEAM_FANOUT",
-        runtime: "BEAM", evidence_type: "PROVIDER_RESPONSE", status: "FAILED", error_code: "http_500",
+        ledger_entry_id: softId,
+        org_entity_id: ORG_ID,
+        attempt_type: "BEAM_FANOUT",
+        runtime: "BEAM",
+        evidence_type: "PROVIDER_RESPONSE",
+        status: "FAILED",
+        error_code: "http_500",
+      },
+    });
+    const softBlind = await app.inject({
+      method: "GET",
+      url: "/api/v1/work-os/blind-spots",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(softBlind.statusCode).toBe(200);
+    const softFound = (
+      softBlind.json() as {
+        items: Array<{ ledger_entry_id: string; blind_spot_reason?: string }>;
+      }
+    ).items.find((i) => i.ledger_entry_id === softId);
+    expect(softFound?.blind_spot_reason).toBeUndefined();
+  });
+
+  it("surfaces a FAILED connector execution attempt in Blind Spots", async () => {
+    const { token, entityId } = await login();
+    const lid = await createLedger(token, {
+      ledger_type: "TASK",
+      title: "proof connector fail",
+      owner_entity_id: entityId,
+    });
+    await prisma.executionAttempt.create({
+      data: {
+        ledger_entry_id: lid,
+        org_entity_id: ORG_ID,
+        attempt_type: "CONNECTOR_EXECUTION",
+        runtime: "TYPESCRIPT",
+        evidence_type: "PROVIDER_RESPONSE",
+        status: "FAILED",
+        error_code: "connector_unavailable",
       },
     });
     const blind = await app.inject({
@@ -147,9 +190,12 @@ describe("execution proof layer", () => {
       headers: { authorization: `Bearer ${token}` },
     });
     expect(blind.statusCode).toBe(200);
-    const found = (blind.json() as { items: Array<{ ledger_entry_id: string; blind_spot_reason?: string }> })
-      .items.find((i) => i.ledger_entry_id === lid);
-    expect(found?.blind_spot_reason).toBe("COORDINATION_FAILED");
+    const found = (
+      blind.json() as {
+        items: Array<{ ledger_entry_id: string; blind_spot_reason?: string }>;
+      }
+    ).items.find((i) => i.ledger_entry_id === lid);
+    expect(found?.blind_spot_reason).toBe("EXECUTION_FAILED");
   });
 
   it("does not leak attempts across tenants", async () => {
