@@ -43,10 +43,16 @@ describe("work-contract", () => {
     expect(r.status).toBe("READY_TO_EXECUTE");
   });
 
-  it("blocks complete on vague", () => {
+  it("blocks complete on vague, allows specific PROPOSED tasks", () => {
     expect(
       cannotCompleteSafely({ title: "Follow up with Riley", status: "DRAFT" }),
     ).toBe(true);
+    expect(
+      cannotCompleteSafely({
+        title: "Please send me the signed contract",
+        status: "PROPOSED",
+      }),
+    ).toBe(false);
     expect(
       cannotCompleteSafely({
         title: "Ship security gate proof",

@@ -128,13 +128,14 @@ export function enforceWorkContract(args: {
 
 /**
  * WHAT: true when Mark complete is unsafe for this title/status.
+ * NOTE: PROPOSED with a specific title (e.g. tracked internal TASK) remains
+ * completable by the owner — only vague titles block completion.
  */
 export function cannotCompleteSafely(args: {
   title: string;
   status: string;
 }): boolean {
   if (isVagueWorkTitle(args.title)) return true;
-  if (args.status === "PROPOSED") return true;
   if (args.status === "EXECUTING") return true;
   return false;
 }
