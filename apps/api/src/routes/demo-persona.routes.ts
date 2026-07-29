@@ -34,11 +34,12 @@ export async function registerDemoPersonaRoutes(
     return reply.code(200).send({
       ok: true,
       org_label: "Y Combinator Labs",
-      fictional_notice:
-        "Fictional Y Combinator Labs demo · HelioGrid is a fictional startup used to demonstrate Otzar’s application-review workflow.",
-      welcome_title: "Welcome, Y Combinator",
+      // Immersive orientation — never use "fictional" on product surfaces.
+      orientation_notice:
+        "See how Otzar turns an application-review conversation into coordinated work, AI-Teammate collaboration, human judgment, and a management result.",
+      welcome_title: "HelioGrid application review",
       welcome_subtitle:
-        "Explore how Otzar changes with responsibility and authority.",
+        "Follow one application review across leadership, specialists, coordination, and external support.",
       org_entity_id: ycDemoOrgEntityId(),
       personas: publicPersonaCards(),
     });
@@ -102,8 +103,7 @@ export async function registerDemoPersonaRoutes(
           display_name: resolved.persona.display_name,
           role_title: resolved.persona.role_title,
         },
-        banner:
-          `Fictional Y Combinator Labs demo · Viewing as ${resolved.persona.role_title}`,
+        banner: `Y Combinator Labs · Viewing as ${resolved.persona.role_title}`,
       });
     },
   );
