@@ -1,0 +1,26 @@
+{
+  "title": "OTZAR — WHOLE-SYSTEM RECOVERY INTEGRATED CLOSURE (Slice 6 progress)",
+  "date": "2026-07-29",
+  "status": "IN_PROGRESS_NOT_YC_READY",
+  "closed_this_campaign": {
+    "server_work_contract": "enforceWorkContract + serverHumanWorkTitle at createLedgerEntry; vague demoted to PROPOSED",
+    "server_complete_gate": "getMyWork can_complete false for vague/PROPOSED",
+    "approval_quarantine": "listActionsForCaller filters non-reviewable PROPOSED when status=PROPOSED",
+    "auto_clarify_pure": "autoClarifyRoutineAmbiguity for security/market/named patterns",
+    "demo_narrative": "HelioGrid fictional seed doctrine doc"
+  },
+  "still_open_external_or_large": [
+    "Full multi-persona live seed + 5 transcript ingestion on production tenant",
+    "Real Google OAuth consent + production identity",
+    "Calendar/Gmail/Drive runtime proof with founder credentials",
+    "Full portable export/import",
+    "Scheduled report runner",
+    "Full screen census + a11y matrix automation",
+    "Python worker health on Render if required"
+  ],
+  "python_role": "Advisory enrichment async; primary extraction TypeScript; UI must never show Python errors",
+  "caretaker_relay_touched": "NO",
+  "background_workers": 0,
+  "founder_experience": "AWAITING FOUNDER REVIEW",
+  "yc_release_candidate": "NOT READY UNTIL FOUNDER APPROVAL"
+}
