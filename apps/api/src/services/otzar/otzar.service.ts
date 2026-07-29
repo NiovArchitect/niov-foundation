@@ -998,8 +998,13 @@ export interface ConversationListItem {
   source_type: string;
   status: string;
   message_count: number;
-  started_at: Date;
-  closed_at: Date | null;
+  /** ISO timestamp (serialized Date). */
+  started_at: Date | string;
+  closed_at: Date | string | null;
+  /** Slice 4 — human title / summary preview (never full transcript). */
+  title?: string | null;
+  summary_preview?: string | null;
+  summary_available?: boolean;
 }
 
 // WHAT: Successful listConversations return (paginated).
@@ -3818,14 +3823,14 @@ export class OtzarService {
       ...(input.status !== undefined ? { status: input.status } : {}),
     };
 
-    const [items, total] = await Promise.all([
+    const [rows, total] = await Promise.all([
       prisma.otzarConversation.findMany({
         where,
         orderBy: { started_at: "desc" },
         skip: input.skip,
         take: input.take,
-        // Metadata-only projection. Deliberately omits `participants`
-        // and never touches message/transcript content (none stored).
+        // Metadata + optional summary link. Deliberately omits participants
+        // and never returns full turn transcripts in this list.
         select: {
           conversation_id: true,
           twin_id: true,
@@ -3834,10 +3839,90 @@ export class OtzarService {
           message_count: true,
           started_at: true,
           closed_at: true,
+          summary_capsule_id: true,
         },
       }),
       prisma.otzarConversation.count({ where }),
     ]);
+
+    // Slice 4 — batch-load close summaries + first user-turn previews so
+    // Conversation History is useful without a full transcript dump.
+    const summaryIds = rows
+      .map((r) => r.summary_capsule_id)
+      .filter((id): id is string => typeof id === "string" && id.length > 0);
+    const summaryById = new Map<string, string>();
+    if (summaryIds.length > 0) {
+      const capsules = await prisma.memoryCapsule.findMany({
+        where: {
+          capsule_id: { in: summaryIds },
+          deleted_at: null,
+          entity_id: ownerEntityId,
+        },
+        select: { capsule_id: true, payload_summary: true },
+      });
+      for (const c of capsules) {
+        if (typeof c.payload_summary === "string" && c.payload_summary.length > 0) {
+          summaryById.set(c.capsule_id, c.payload_summary);
+        }
+      }
+    }
+    const needsPreview = rows
+      .filter((r) => !summaryById.has(r.summary_capsule_id ?? ""))
+      .map((r) => r.conversation_id);
+    const previewByConv = new Map<string, string>();
+    if (needsPreview.length > 0) {
+      const turns = await prisma.otzarConversationTurn.findMany({
+        where: {
+          conversation_id: { in: needsPreview },
+          subject_entity_id: ownerEntityId,
+          role: "USER",
+        },
+        orderBy: { sequence: "asc" },
+        select: {
+          conversation_id: true,
+          content: true,
+          sequence: true,
+        },
+        take: needsPreview.length * 3,
+      });
+      for (const t of turns) {
+        if (previewByConv.has(t.conversation_id)) continue;
+        const text = (t.content ?? "").trim().replace(/\s+/g, " ");
+        if (text.length === 0) continue;
+        previewByConv.set(
+          t.conversation_id,
+          text.length > 160 ? `${text.slice(0, 157)}…` : text,
+        );
+      }
+    }
+
+    const items: ConversationListItem[] = rows.map((r) => {
+      const closeSummary = r.summary_capsule_id
+        ? summaryById.get(r.summary_capsule_id) ?? null
+        : null;
+      const livePreview = previewByConv.get(r.conversation_id) ?? null;
+      const summary_preview = closeSummary ?? livePreview;
+      const title =
+        summary_preview !== null
+          ? summary_preview.length > 72
+            ? `${summary_preview.slice(0, 69)}…`
+            : summary_preview
+          : r.status === "ACTIVE"
+            ? "Active conversation"
+            : "Past conversation";
+      return {
+        conversation_id: r.conversation_id,
+        twin_id: r.twin_id,
+        source_type: r.source_type,
+        status: r.status,
+        message_count: r.message_count,
+        started_at: r.started_at.toISOString(),
+        closed_at: r.closed_at ? r.closed_at.toISOString() : null,
+        title,
+        summary_preview,
+        summary_available: closeSummary !== null,
+      };
+    });
 
     return {
       ok: true,
@@ -5373,8 +5458,33 @@ export class OtzarService {
       select: { wallet_id: true },
     });
     if (ownerWallet === null) return;
+    // Slice 4 — prefer a short human summary from the first user turns
+    // instead of a UUID-bearing auto-close string (zero useful history).
+    let summary =
+      "Talk session closed after idle time. Open the conversation for continuity.";
+    try {
+      const turns = await prisma.otzarConversationTurn.findMany({
+        where: {
+          conversation_id: conversationId,
+          subject_entity_id: ownerEntityId,
+          role: "USER",
+        },
+        orderBy: { sequence: "asc" },
+        take: 3,
+        select: { content: true },
+      });
+      const bits = turns
+        .map((t) => (t.content ?? "").trim().replace(/\s+/g, " "))
+        .filter((s) => s.length > 0)
+        .map((s) => (s.length > 80 ? `${s.slice(0, 77)}…` : s));
+      if (bits.length > 0) {
+        summary = `You discussed: ${bits.join(" · ")}`;
+        if (summary.length > 280) summary = `${summary.slice(0, 277)}…`;
+      }
+    } catch {
+      // keep fallback summary
+    }
     const newCapsuleId = randomUUID();
-    const summary = `Conversation ${conversationId} auto-closed (idle > 30 min)`;
     await prisma.memoryCapsule.create({
       data: {
         capsule_id: newCapsuleId,
@@ -5382,7 +5492,7 @@ export class OtzarService {
         entity_id: ownerEntityId,
         version: 1,
         capsule_type: "CONVERSATION_LEARNING",
-        topic_tags: ["auto_closed"],
+        topic_tags: ["auto_closed", "conversation_summary"],
         decay_type: "TIME_BASED",
         payload_summary: summary,
         payload_size_tokens: Math.ceil(summary.length / 4),
