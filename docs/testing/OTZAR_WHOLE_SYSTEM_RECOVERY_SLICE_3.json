@@ -1,11 +1,11 @@
 {
-  "title": "OTZAR — WHOLE-SYSTEM RECOVERY SLICE 3",
+  "title": "OTZAR \u2014 WHOLE-SYSTEM RECOVERY SLICE 3",
   "date": "2026-07-29",
-  "status": "SHIPPING",
-  "foundation_source_deploy": "pending",
-  "control_tower_source_deploy": "pending",
-  "app_bundle": "pending",
-  "deployment_parity": "pending",
+  "status": "LIVE",
+  "foundation_source_deploy": "ad36c012b332d16c995e2c2cde9a63bd916cda8d",
+  "control_tower_source_deploy": "0ea400002241ebcc1f57cdf12aed3fac37580c3a",
+  "app_bundle": "assets/index-CjtzQAYd.js",
+  "deployment_parity": "YES",
   "connections_root_causes": [
     "Employee Connections was capability-category maze, not tool cards",
     "OAuth callback left users on a dead HTML page (close this tab)",
@@ -22,7 +22,7 @@
   ],
   "shipped": {
     "employee_heading": "Connect your work tools",
-    "oauth_callback_return": "CONTROL_TOWER_URL/app/connector-health?oauth=…&tool=…",
+    "oauth_callback_return": "CONTROL_TOWER_URL/app/connector-health?oauth=\u2026&tool=\u2026",
     "account_label_on_catalog": true,
     "return_context": "sessionStorage + deep-link why/return",
     "work_ledger_setup_link": "/app/connector-health with tool+return+why",
