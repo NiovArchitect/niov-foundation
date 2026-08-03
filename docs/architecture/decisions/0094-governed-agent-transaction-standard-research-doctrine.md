@@ -226,6 +226,94 @@ canonical); the §9 GA1-GA10 per-slice authorization requirement for
 persistent models and any real rail; rail-agnosticism; custody
 posture (Foundation handles no private keys).
 
+## Amendment 2 — 2026-06-12 rail-landscape re-verification + governed-intent boundary for MCP/x402 surfaces (PROPOSED DRAFT — awaiting Founder authorization per RULE 20)
+
+**Authorization:** PENDING. This amendment is decision-ready per the
+Phase 1261 Founder directive ("Prepare ADR-0094 Amendment 2 as a
+decision-ready patch/draft based on Phase 1260 findings"); it does
+NOT land until the Founder explicitly approves per RULE 20. Drafting
+is not modifying — the Founder's approval is the act that lands it.
+
+**What this amendment does NOT do:** it does not lift, weaken, or
+re-interpret any of the §2 five inviolable bans; it does not
+authorize any GA-slice, rail integration, sandbox transaction, or
+credential activation. Settlement remains NOT_AUTHORIZED.
+
+### A2.1 — §4 research re-verification (RULE 21 arc of 2026-06-12)
+
+Full evidence: `docs/operations/x402-base-cdp-architecture-validation.md`
+(Phase 1260; drift findings D-1260-1..4). Canonical deltas since the
+§4 arc of 2026-06-02:
+
+1. **x402 is protocol v2** under the x402 Foundation: payload
+   `x402Version: 2`; headers `PAYMENT-REQUIRED` / `PAYMENT-SIGNATURE`
+   / `PAYMENT-RESPONSE` (v1 `X-PAYMENT` / `X-PAYMENT-RESPONSE`
+   superseded); CAIP-2 network IDs (`eip155:8453` Base mainnet,
+   `eip155:84532` Base Sepolia); scoped npm packages `@x402/*`
+   (v2.14.x) supersede unscoped v1 `x402*`; schemes `exact` + v2
+   `upto` + `batch-settlement`. Any future GA6+ x402 slice MUST
+   target v2 and treat v1 packages as legacy.
+2. **CDP Server Wallet v1 + `@coinbase/coinbase-sdk` are deprecated**
+   (2026-02-02). Current direction: `@coinbase/cdp-sdk` Server
+   Wallets v2 (auth triple `CDP_API_KEY_ID` + `CDP_API_KEY_SECRET` +
+   `CDP_WALLET_SECRET`). The connector registry's two env names
+   remain correct for the API pair; a future wallet slice adds the
+   third name. AgentKit direction: `@coinbase/agentkit`
+   (`@coinbase/cdp-agentkit-core` deprecated).
+3. **The `base-mcp` npm package is dead** (repo archived 2026-05-13).
+   Current direction: hosted remote MCP at `https://mcp.base.org`
+   (HTTP transport; Base Account OAuth; per-action human approval
+   URLs; tools include transfers, swaps, signing, and x402 payments).
+   The hosted Base MCP is a DISTINCT integration surface from CDP
+   and requires its own RULE 21 research arc at any future slice —
+   added to the §9 per-rail research-arc list by this amendment.
+4. **Vendor governance primitives strengthen §4.4**: CDP Policy
+   Engine (declarative accept/reject rules) and Base Account Spend
+   Permissions (scoped allowance grants) are vendor-tier policy
+   enforcement — none produce a portable, cryptographically-chained
+   pre-transaction authorization record. Foundation's rail-agnostic
+   authorization-evidence gap analysis holds unchanged.
+
+The churn itself (a protocol major-version bump, a deprecated SDK,
+and a dead package — all within months) is direct evidence FOR the
+§1 doctrine: the authorization record must survive independent of
+any rail vendor's lifecycle. Rails are replaceable; the DMW
+authorization record outlives them.
+
+### A2.2 — Governed-intent boundary for MCP financial tools and x402 paid calls (doctrine clarification)
+
+The §2 bans + Amendment 1 policy gate already enforce this at
+runtime; this amendment names the boundary canonically so future
+MCP/agent slices cannot drift around it:
+
+- **MCP financial tools cannot bypass Foundation.** Any MCP server
+  tool whose invocation would move value (Base MCP `send`/`swap`/
+  x402 payment tools, or any equivalent) is a FINANCIAL-class
+  operation: it MUST enter as a governed TransactionIntent
+  (propose → policy gate → human approval → execute as separate
+  capabilities per Amendment 1) or be BLOCKED. A vendor-side
+  approval surface (e.g., Base MCP approval URLs) is at most an
+  outer second confirmation — never a substitute for the governed
+  intent.
+- **x402 paid API calls are transactions.** An agent encountering an
+  HTTP 402 / `PAYMENT-REQUIRED` challenge MUST NOT satisfy it
+  directly. The challenge either becomes a governed
+  TransactionIntent (which remains MOCK_RAIL-only until a GA-slice
+  authorizes a real rail) or the call fails closed with an honest
+  error.
+- **Credentials alone never activate settlement** (Amendment 1 test
+  locks, re-affirmed): the presence of CDP/Circle/provider
+  credentials in env or org-scoped storage changes connector
+  *status* surfaces only — never gate outcomes.
+
+### A2.3 — Catalog effect
+
+§9's "Per-rail RULE 21 research arcs explicitly NOT in this slice"
+list gains: **hosted Base MCP (`mcp.base.org`; Base Account OAuth
+model)** as a distinct surface from Coinbase CDP. No other section
+changes. The 5 bans, the 8 GATS objects, the GA1-GA10 ladder, and
+all composition contracts stand verbatim.
+
 ## Consequences
 
 **Positive.**
